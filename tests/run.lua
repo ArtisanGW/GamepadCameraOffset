@@ -69,6 +69,11 @@ local function boot(gamepad, saved)
             return s
         end,
         SetOnValueChangedCallback = function(variable, fn) game.callbacks[variable] = fn end,
+        RegisterProxySetting = function(cat, variable, kind, label, def, getValue, setValue)
+            local s = { variable = variable, key = variable, label = label, getValue = getValue, setValue = setValue }
+            game.settings[variable] = s
+            return s
+        end,
         CreateCheckbox = function() end,
         CreateSlider = function(_, setting, options) game.options = game.options or {}; game.options[setting.key] = options end,
         CreateSliderOptions = function(lo, hi, step)
@@ -358,7 +363,7 @@ local function dotColor()
     return string.format("%.2f %.2f %.2f %.2f", color[1], color[2], color[3], color[4])
 end
 
-test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or the game's color picker, white when off", function()
+test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or four 0-255 sliders, white when off", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     eq(GamepadCameraOffsetDB.crosshairColor, "FFFFFFFF", "white by default")
@@ -372,16 +377,18 @@ test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or the game's col
     SlashCmdList.GAMEPADCAMERAOFFSET("color #00ff00")
     eq(GamepadCameraOffsetDB.crosshairColor, "00FF00FF", "six digits: opaque")
 
-    eq(#game.buttons, 1, "a Crosshair color button on the settings page")
-    eq(game.buttons[1].name, "Crosshair color")
-    game.buttons[1].onClick()
-    eq(game.picker.shown, true, "opens the game's color picker")
-    eq(game.picker.info.hasOpacity, true, "with opacity")
-    game.picker.red, game.picker.green, game.picker.blue, game.picker.alpha = 0, 0, 1, 0.5
-    game.picker.info.swatchFunc()
-    eq(GamepadCameraOffsetDB.crosshairColor, "0000FF80", "the picked color, alpha last")
-    game.picker.info.cancelFunc()
-    eq(GamepadCameraOffsetDB.crosshairColor, "00FF00FF", "cancel: the color it had")
+    eq(#game.buttons, 0, "no button opening the game's color picker (its controller bindings went on tainted)")
+    local red, green, blue, opacity = game.settings.GamepadCameraOffset_crosshairColor1, game.settings.GamepadCameraOffset_crosshairColor2,
+        game.settings.GamepadCameraOffset_crosshairColor3, game.settings.GamepadCameraOffset_crosshairColor4
+    eq(red.label, "Crosshair red"); eq(opacity.label, "Crosshair opacity")
+    eq(red.getValue(), 0); eq(green.getValue(), 255); eq(opacity.getValue(), 255, "sliders read the saved color")
+    red.setValue(255); green.setValue(128); opacity.setValue(102)
+    eq(GamepadCameraOffsetDB.crosshairColor, "FF8000" .. "66", "sliders write the one RRGGBBAA value")
+    eq(dotColor(), "1.00 0.50 0.00 0.40", "tinted at once")
+    blue.setValue(999)
+    eq(blue.getValue(), 255, "clamped to 255")
+    eq(game.options.GamepadCameraOffset_crosshairColor1.format(128), "128")
+    SlashCmdList.GAMEPADCAMERAOFFSET("color 00FF00FF")
 
     set("crosshair", false)
     eq(dotColor(), "1.00 1.00 1.00 1.00", "crosshair setting off: the game's own white")

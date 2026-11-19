@@ -404,24 +404,23 @@ function Camera.SetCrosshairColor(text)
     return true
 end
 
--- The game's color picker, with opacity, on the crosshair's color. Cancel puts
--- back the color it had.
-function Camera.OpenCrosshairColorPicker()
-    local picker = _G.ColorPickerFrame
-    if type(picker) ~= "table" or type(picker.SetupColorPickerAndShow) ~= "function" then return end
-    local colorBefore = getSettings().crosshairColor
-    local red, green, blue, alpha = Camera.ParseColor(colorBefore)
-    if not red then red, green, blue, alpha = 1, 1, 1, 1 end
-    local function takePickedColor()
-        local pickedRed, pickedGreen, pickedBlue = picker:GetColorRGB()
-        local pickedAlpha = type(picker.GetColorAlpha) == "function" and picker:GetColorAlpha() or 1
-        Camera.SetCrosshairColor(Camera.FormatColor(pickedRed, pickedGreen, pickedBlue, pickedAlpha))
-    end
-    picker:SetupColorPickerAndShow({
-        r = red, g = green, b = blue, opacity = alpha, hasOpacity = true,
-        swatchFunc = takePickedColor, opacityFunc = takePickedColor,
-        cancelFunc = function() Camera.SetCrosshairColor(colorBefore) end,
-    })
+-- One channel of the crosshair's color, 0 to 255: red 1, green 2, blue 3, opacity 4.
+-- The color settings' sliders read and write it, all in the one RRGGBBAA value.
+-- (Not the game's color picker: opened from addon code, its controller bindings
+-- went on the game's binding stack tainted, so the right stick did nothing and the
+-- game then refused its own SetPreferredGamepadInteractTarget, blaming this addon.
+-- Seen in game, 2026-11-19.)
+function Camera.ColorChannel(channel)
+    local channels = { Camera.ParseColor(getSettings().crosshairColor) }
+    if not channels[1] then return 255 end
+    return math.floor(channels[channel] * 255 + 0.5)
+end
+
+function Camera.SetColorChannel(channel, value)
+    local channels = { Camera.ParseColor(getSettings().crosshairColor) }
+    if not channels[1] then channels = { 1, 1, 1, 1 } end
+    channels[channel] = math.max(0, math.min(255, tonumber(value) or 255)) / 255
+    Camera.SetCrosshairColor(Camera.FormatColor(channels[1], channels[2], channels[3], channels[4]))
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -515,15 +514,20 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
-    -- The crosshair's color: a button opening the game's color picker.
-    if type(CreateSettingsButtonInitializer) == "function" and SettingsPanel and SettingsPanel.GetLayout then
-        local layout = SettingsPanel:GetLayout(category)
-        local colorButton = CreateSettingsButtonInitializer("Crosshair color", "Choose",
-            function() Camera.OpenCrosshairColorPicker() end,
-            "The color and opacity of the controller's aiming dot, e.g. to see it better on the "
-            .. "ground. Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.",
-            true)
-        if layout and layout.AddInitializer then layout:AddInitializer(colorButton) end
+    -- The crosshair's color: four sliders, 0 to 255, on the one RRGGBBAA value.
+    if type(Settings.RegisterProxySetting) == "function" then
+        local channelNames = { "Crosshair red", "Crosshair green", "Crosshair blue", "Crosshair opacity" }
+        for channel, label in ipairs(channelNames) do
+            local setting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairColor" .. channel,
+                Settings.VarType.Number, label, 255,
+                function() return Camera.ColorChannel(channel) end,
+                function(value) Camera.SetColorChannel(channel, value) end)
+            local tooltip = "The controller's aiming dot's " .. (channel == 4 and "opacity" or "color")
+                .. ", 0 to 255. Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF."
+            Settings.CreateSlider(category, setting, sliderOptions(0, 255, 5, function(value)
+                return tostring(math.floor((tonumber(value) or 0) + 0.5))
+            end), tooltip)
+        end
     end
 
     Settings.RegisterAddOnCategory(category)
