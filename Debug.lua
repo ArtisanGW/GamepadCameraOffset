@@ -88,14 +88,16 @@ local function checkCrosshair(label, aimPercent)
     local name = "crosshair at " .. label
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
     if Camera.CrosshairTargetNameplate() then
-        local _, anchoredTo = GamepadReticle:GetPoint(1)
-        return expectEqual(name .. ": on the target's nameplate", true, anchoredTo == Camera.CrosshairTargetNameplate())
+        local _, anchoredTo, _, _, heightFromNameplate = GamepadReticle:GetPoint(1)
+        expectEqual(name .. ": on the target's nameplate", true, anchoredTo == Camera.CrosshairTargetNameplate())
+        return expectNear(name .. ": height from the nameplate",
+            -Camera.CROSSHAIR_BELOW_NAMEPLATE + aimPercent / 100 * UIParent:GetHeight(), heightFromNameplate, 1)
     end
     local aimHeight = Camera.GetAimHeight(GamepadReticle)
     if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end
     local x, y = getCrosshairPosition()
     expectNear(name .. ": x, in the middle, where the game aims", 0, x, 1)
-    expectNear(name .. ": y", aimHeight + aimPercent / 100 * UIParent:GetHeight(), y, 1)
+    expectNear(name .. ": y, the game's aim height (the height setting is for targets)", aimHeight, y, 1)
 end
 
 -- The steps, one every SECONDS_BETWEEN_STEPS.
@@ -152,7 +154,7 @@ end
 for _, aimPercent in ipairs({ 10, -10, 0 }) do
     addStep(function()
         changeSettings({ side = 50, aim = aimPercent })
-        checkCrosshair("crosshair height " .. Camera.Label(aimPercent, "Normal", "up", "down"), aimPercent)
+        checkCrosshair("crosshair height on target " .. Camera.Label(aimPercent, "Under the nameplate", "up", "down"), aimPercent)
     end)
 end
 

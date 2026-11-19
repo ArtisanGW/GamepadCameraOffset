@@ -47,7 +47,8 @@ local Camera = {
     --   lookDown: 0 to 100, how much of the tilt stays when you look down at your
     --           character (the game's DownScale, 0 to 1). 0% is the tilt fading
     --           away entirely as you look down.
-    --   aim:    -25 (down) to 25 (up), in percent of the screen's height.
+    --   aim:    the crosshair's height on a target: -25 (down) to 25 (up) from just
+    --           below its nameplate, in percent of the screen's height.
     DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
@@ -219,8 +220,8 @@ end
 -- below the target's nameplate: anchored to it, so the game moves it with the
 -- target and nothing here runs per frame. It's placed again only when the target
 -- changes or its nameplate comes or goes. With no target, or no nameplate (they're
--- off, or the target is off screen), it stays where the game aims, moved up or
--- down by the crosshair height setting. (Following the character instead, as
+-- off, or the target is off screen), it stays where the game aims. The crosshair
+-- height setting moves it up or down from the nameplate. (Following the character instead, as
 -- before, put the dot far from what you were attacking: seen in game.)
 -- It's a plain frame, not a protected one, so it moves in combat too.
 
@@ -270,16 +271,17 @@ function Camera.PlaceCrosshair()
     end
     local nameplate = Camera.CrosshairTargetNameplate()
     if nameplate then
+        local aimPercent = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
+        local heightFromNameplate = -Camera.CROSSHAIR_BELOW_NAMEPLATE + aimPercent / 100 * UIParent:GetHeight()
         crosshairFrame:ClearAllPoints()
-        crosshairFrame:SetPoint("CENTER", nameplate, "BOTTOM", 0, -Camera.CROSSHAIR_BELOW_NAMEPLATE)
+        crosshairFrame:SetPoint("CENTER", nameplate, "BOTTOM", 0, heightFromNameplate)
         crosshairPlacedOn = "nameplate"
         return
     end
     local aimHeight = getAimHeight(crosshairFrame)
     if not aimHeight then return end
-    local aimPercent = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
     crosshairFrame:ClearAllPoints()
-    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", 0, aimHeight + aimPercent / 100 * UIParent:GetHeight())
+    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", 0, aimHeight)
     crosshairPlacedOn = "screen"
 end
 Camera.CrosshairPlacedOn = function() return crosshairPlacedOn end
@@ -403,11 +405,12 @@ function Camera.RegisterSettings()
         .. "below your target's nameplate, or the controller's soft target's, so it stays on "
         .. "what you attack as you both move. With no target, or nameplates off, it stays "
         .. "where the game aims. What the controller targets is still decided by the game.")
-    addSetting("aim", Settings.VarType.Number, "Crosshair height",
-        "With no target, moves the controller's aiming dot up or down from where the game "
-        .. "puts it, in percent of the screen's height. Normal is the game's own place.",
+    addSetting("aim", Settings.VarType.Number, "Crosshair height on target",
+        "Moves the controller's aiming dot up or down from just below your target's "
+        .. "nameplate, in percent of the screen's height, e.g. down onto its body. "
+        .. "With no target the dot stays where the game aims.",
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
-            function(value) return Camera.Label(value, "Normal", "up", "down") end))
+            function(value) return Camera.Label(value, "Under the nameplate", "up", "down") end))
 
     Settings.RegisterAddOnCategory(category)
 end
