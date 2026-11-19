@@ -26,10 +26,15 @@ local Cam = {
     REDUCE = "CameraReduceUnexpectedMovement",
     -- What Blizzard's controller UI puts on the temp layer (Core.lua), put back on disable.
     PAD_TEMP = { CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" },
-    DEFAULTS = { enabled = true, horizontal = 1.2, vertical = 0.3, crosshair = true, crosshairHeight = 0 },
-    H_MIN = -3, H_MAX = 3, H_STEP = 0.1,      -- yards; negative is the left shoulder
-    V_MIN = 0, V_MAX = 0.9, V_STEP = 0.05,     -- share of the view kept above the character
-    C_MIN = -200, C_MAX = 200, C_STEP = 5,     -- crosshair height nudge, UI units
+    -- Every slider is a percentage. side: -100 (left) to 100 (right), 100% being
+    -- SIDE_YARDS. height: 0 to 100, 100% being HEIGHT_MAX of the view kept above
+    -- the character. aim: -25 (down) to 25 (up), in percent of the screen height.
+    DEFAULTS = { enabled = true, side = 40, height = 35, crosshair = true, aim = 0 },
+    SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
+    HEIGHT_MIN = 0, HEIGHT_MAX_PCT = 100, HEIGHT_STEP = 5,
+    AIM_MIN = -25, AIM_MAX = 25, AIM_STEP = 1,
+    SIDE_YARDS = 3,      -- test_cameraOverShoulder at 100%
+    HEIGHT_MAX = 0.9,    -- test_cameraDynamicPitchBaseFovPad at 100%
     -- Where the character sits on screen. The camera aims at the character, then
     -- slides sideways by the shoulder offset, so the character sits that many
     -- yards left of the middle, seen from the zoom distance. At cameraFov 90 the
@@ -75,8 +80,29 @@ local function controllerUI()
         and InputUtil.IsGamepadUIEnabled() == true
 end
 
+local function round(v, step) return math.floor(v / step + 0.5) * step end
+
+-- Settings saved before the sliders were percentages (yards, a 0-0.9 share, UI
+-- units) are converted once, to the nearest step.
+local function migrate(d)
+    local h, v, c = tonumber(d.horizontal), tonumber(d.vertical), tonumber(d.crosshairHeight)
+    if d.side == nil and h then
+        d.side = math.max(Cam.SIDE_MIN, math.min(Cam.SIDE_MAX, round(h / Cam.SIDE_YARDS * 100, Cam.SIDE_STEP)))
+    end
+    if d.height == nil and v then
+        d.height = math.max(Cam.HEIGHT_MIN, math.min(Cam.HEIGHT_MAX_PCT, round(v / Cam.HEIGHT_MAX * 100, Cam.HEIGHT_STEP)))
+    end
+    if d.aim == nil and c then
+        local screen = UIParent and UIParent:GetHeight() or 768
+        if not screen or screen <= 0 then screen = 768 end
+        d.aim = math.max(Cam.AIM_MIN, math.min(Cam.AIM_MAX, round(c / screen * 100, Cam.AIM_STEP)))
+    end
+    d.horizontal, d.vertical, d.crosshairHeight = nil, nil, nil
+end
+
 local function db()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
+    migrate(GamepadCameraOffsetDB)
     for k, v in pairs(Cam.DEFAULTS) do
         if GamepadCameraOffsetDB[k] == nil then GamepadCameraOffsetDB[k] = v end
     end
@@ -98,8 +124,9 @@ function Cam.Apply()
     applied = true
     setTemp(Cam.CENTERED, 0)
     setTemp(Cam.REDUCE, 0)
-    set(Cam.HORIZONTAL, clamp(d.horizontal, Cam.H_MIN, Cam.H_MAX, Cam.DEFAULTS.horizontal))
-    local v = clamp(d.vertical, Cam.V_MIN, Cam.V_MAX, Cam.DEFAULTS.vertical)
+    local side = clamp(d.side, Cam.SIDE_MIN, Cam.SIDE_MAX, Cam.DEFAULTS.side)
+    set(Cam.HORIZONTAL, side / 100 * Cam.SIDE_YARDS)
+    local v = clamp(d.height, Cam.HEIGHT_MIN, Cam.HEIGHT_MAX_PCT, Cam.DEFAULTS.height) / 100 * Cam.HEIGHT_MAX
     set(Cam.PITCH, v > 0 and 1 or 0)
     set(Cam.PAD, v)
     set(Cam.PAD_FLYING, v)
@@ -138,7 +165,7 @@ local function number(name)
 end
 
 -- The character's offset from the screen's middle, in UIParent units (x only:
--- the vertical offset tilts the camera around the character, which stays on
+-- the height setting tilts the camera around the character, which stays on
 -- the middle line).
 function Cam.CharacterX()
     local shoulder = number(Cam.HORIZONTAL) or 0
@@ -178,7 +205,8 @@ function Cam.PlaceCrosshair(force)
     end
     local x, y = Cam.CharacterX(), centerY(r)
     if not x or not y then return end
-    y = y + (tonumber(db().crosshairHeight) or 0)
+    local aim = clamp(db().aim, Cam.AIM_MIN, Cam.AIM_MAX, 0)
+    y = y + aim / 100 * UIParent:GetHeight()
     if not force and reticle and math.abs(reticle.x - x) < Cam.MOVE and math.abs(reticle.y - y) < Cam.MOVE then return end
     reticle = { x = x, y = y }
     r:ClearAllPoints()
@@ -219,6 +247,14 @@ end
 
 -- Settings: Options > AddOns > GamepadCameraOffset
 
+-- A slider's label: zero as a word ("Centered", "Normal"), the rest as a whole
+-- percentage with a direction ("40% right", "10% down").
+function Cam.Label(v, zero, up, down)
+    local pct = math.floor(math.abs(tonumber(v) or 0) + 0.5)
+    if pct == 0 then return zero end
+    return string.format("%d%% %s", pct, ((tonumber(v) or 0) < 0 and down) or up)
+end
+
 local function sliderOptions(lo, hi, step, format)
     local o = Settings.CreateSliderOptions(lo, hi, step)
     local right = MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label
@@ -249,21 +285,25 @@ function Cam.RegisterSettings()
         .. "Turned off, the game's own camera comes back.\n\n"
         .. "These are the game's experimental camera settings: the first change in a "
         .. "session shows its warning. Accept keeps them.")
-    add("horizontal", Settings.VarType.Number, "Horizontal offset",
-        "How far the camera sits to the side of your character, in yards. "
-        .. "Positive is over the right shoulder, negative over the left, 0 centered.",
-        sliderOptions(Cam.H_MIN, Cam.H_MAX, Cam.H_STEP, function(v) return string.format("%.1f yd", v) end))
-    add("vertical", Settings.VarType.Number, "Vertical offset",
-        "How much of the view is kept above your character, which moves your "
-        .. "character down the screen. Stronger the further you zoom out. 0 is the game's normal view.",
-        sliderOptions(Cam.V_MIN, Cam.V_MAX, Cam.V_STEP, function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end))
+    add("side", Settings.VarType.Number, "Side offset",
+        "Moves the camera over your right or left shoulder. Centered is the game's normal view; "
+        .. "100% is the furthest the addon goes. The effect is stronger when you zoom in.",
+        sliderOptions(Cam.SIDE_MIN, Cam.SIDE_MAX, Cam.SIDE_STEP,
+            function(v) return Cam.Label(v, "Centered", "right", "left") end))
+    add("height", Settings.VarType.Number, "Height",
+        "Raises the camera's view so your character sits lower on the screen. Normal is the game's "
+        .. "own view; 100% is the furthest the addon goes. The effect is stronger when you zoom out.",
+        sliderOptions(Cam.HEIGHT_MIN, Cam.HEIGHT_MAX_PCT, Cam.HEIGHT_STEP,
+            function(v) return Cam.Label(v, "Normal", "higher") end))
     add("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
         "With the controller UI on, moves its aiming dot sideways so it stays in line with "
-        .. "your character as the horizontal offset and your zoom change. Only the dot moves: "
+        .. "your character as the side offset and your zoom change. Only the dot moves: "
         .. "what the controller targets is still decided by the game.")
-    add("crosshairHeight", Settings.VarType.Number, "Crosshair height",
-        "Moves the controller's aiming dot up or down from where the game puts it.",
-        sliderOptions(Cam.C_MIN, Cam.C_MAX, Cam.C_STEP, function(v) return string.format("%+d", math.floor(v + 0.5)) end))
+    add("aim", Settings.VarType.Number, "Crosshair height",
+        "Moves the controller's aiming dot up or down from where the game puts it, "
+        .. "in percent of the screen's height. Normal is the game's own place.",
+        sliderOptions(Cam.AIM_MIN, Cam.AIM_MAX, Cam.AIM_STEP,
+            function(v) return Cam.Label(v, "Normal", "up", "down") end))
 
     Settings.RegisterAddOnCategory(category)
 end
