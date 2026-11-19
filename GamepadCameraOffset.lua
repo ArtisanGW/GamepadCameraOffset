@@ -87,7 +87,6 @@ end
 
 -- Saved settings
 
-
 local function clamp(value, minimum, maximum, fallback)
     value = tonumber(value)
     if not value then return fallback end
