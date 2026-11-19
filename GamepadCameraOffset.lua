@@ -408,9 +408,9 @@ function Camera.RegisterSettings()
     addSetting("aim", Settings.VarType.Number, "Crosshair height on target",
         "Moves the controller's aiming dot up or down from just below your target's "
         .. "nameplate, in percent of the screen's height, e.g. down onto its body. "
-        .. "With no target the dot stays where the game aims.",
+        .. "Default is just below the nameplate. With no target the dot stays where the game aims.",
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
-            function(value) return Camera.Label(value, "Under the nameplate", "up", "down") end))
+            function(value) return Camera.Label(value, "Default", "up", "down") end))
 
     Settings.RegisterAddOnCategory(category)
 end

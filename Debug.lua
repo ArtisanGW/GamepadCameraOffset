@@ -154,7 +154,7 @@ end
 for _, aimPercent in ipairs({ 10, -10, 0 }) do
     addStep(function()
         changeSettings({ side = 50, aim = aimPercent })
-        checkCrosshair("crosshair height on target " .. Camera.Label(aimPercent, "Under the nameplate", "up", "down"), aimPercent)
+        checkCrosshair("crosshair height on target " .. Camera.Label(aimPercent, "Default", "up", "down"), aimPercent)
     end)
 end
 
