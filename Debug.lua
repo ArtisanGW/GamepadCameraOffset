@@ -88,11 +88,14 @@ local function checkCrosshair(label, offsetPixels)
     local name = "crosshair at " .. label
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
     if Camera.CrosshairTargetNameplate() then
-        local _, anchoredTo, _, _, heightFromNameplate = GamepadReticle:GetPoint(1)
-        expectEqual(name .. ": on the target's nameplate", true,
-            anchoredTo == Camera.VisibleNameplatePart(Camera.CrosshairTargetNameplate()))
+        -- Anchored to a nameplate, the crosshair can't be measured (a restricted
+        -- region): the addon's own record of where it put it is checked instead.
+        local placement = Camera.CrosshairPlacement()
+        expectEqual(name .. ": on the target's nameplate", true, placement ~= nil
+            and placement.anchor == Camera.VisibleNameplatePart(Camera.CrosshairTargetNameplate()))
         return expectNear(name .. ": height from the nameplate",
-            -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(GamepadReticle, offsetPixels), heightFromNameplate, 1)
+            -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(GamepadReticle, offsetPixels),
+            placement and placement.height, 1)
     end
     local aimHeight = Camera.GetAimHeight(GamepadReticle)
     if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end

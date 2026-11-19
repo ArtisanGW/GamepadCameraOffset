@@ -106,7 +106,14 @@ local function boot(gamepad, saved)
         GetEffectiveScale = function() return 1.5 end,
         ClearAllPoints = function(self) self.point = nil end,
         SetPoint = function(self, p, rel, rp, x, y) self.point = { p, rp, x, y, relativeTo = rel } end,
-        GetPoint = function(self) local q = self.point; if q then return q[1], q.relativeTo or UIParent, q[2], q[3], q[4] end end,
+        -- Like the game: anchored to a nameplate (a restricted region), it can't be measured.
+        GetPoint = function(self)
+            local q = self.point
+            if q and type(q.relativeTo) == "table" and q.relativeTo.restricted then
+                error("GamepadReticle:GetPoint(): Action[FrameMeasurement] failed because[Can't measure restricted regions]")
+            end
+            if q then return q[1], q.relativeTo or UIParent, q[2], q[3], q[4] end
+        end,
         Recenter = function(self) game.recenters = game.recenters + 1; self.point = { "CENTER", "BOTTOM", 0, 320 } end,
         Icons = { StandardIcon = { color = { 1, 1, 1, 1 }, SetVertexColor = function(self, r, g, b, a) self.color = { r, g, b, a } end } },
     }
@@ -512,6 +519,25 @@ test("/gco debug on a controller: every check passes, settings come back, findin
     eq(reloadBox.shown, true, "reload box shown")
     eq(reloadBox.reloadButton.attributes.macrotext, "/reload"); eq(reloadBox.reloadButton.template, "SecureActionButtonTemplate,UIPanelButtonTemplate")
     reloadBox.laterButton.click(); eq(reloadBox.shown, false, "Later hides it")
+end)
+
+test("/gco debug with a target: the crosshair on its nameplate is checked without measuring it (a restricted region)", function()
+    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = -5 })
+    game.units.target = true; game.nameplates.target = { restricted = true }
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    SlashCmdList.GAMEPADCAMERAOFFSET("debug")
+    runUntilNoTimersLeft()
+    local run = GamepadCameraOffsetDebugDB.runs[1]
+    local onNameplate = 0
+    for _, check in ipairs(run.checks) do
+        if check.result ~= "pass" then
+            error(check.result .. ": " .. check.name .. " expected " .. tostring(check.expected)
+                .. " got " .. tostring(check.actual) .. " " .. tostring(check.note))
+        end
+        if check.name:find("on the target's nameplate", 1, true) then onNameplate = onNameplate + 1 end
+    end
+    eq(run.failed, 0)
+    eq(onNameplate > 0, true, "the nameplate checks ran")
 end)
 
 test("/gco debug on keyboard: crosshair checks skipped, the rest pass", function()

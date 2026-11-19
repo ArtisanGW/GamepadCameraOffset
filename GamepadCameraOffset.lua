@@ -243,6 +243,7 @@ local function readableOrNil(value)
 end
 
 local crosshairPlacedOn   -- "nameplate", "screen", or nil while Blizzard placed it
+local crosshairPlacement  -- on a nameplate: { anchor = the part it's under, height = its offset }
 
 local function shouldMoveCrosshair()
     local settings = getSettings()
@@ -319,6 +320,7 @@ function Camera.PlaceCrosshair()
         crosshairFrame:ClearAllPoints()
         crosshairFrame:SetPoint("CENTER", anchor, "BOTTOM", 0, heightFromNameplate)
         crosshairPlacedOn = "nameplate"
+        crosshairPlacement = { anchor = anchor, height = heightFromNameplate }
         return
     end
     local aimHeight = getAimHeight(crosshairFrame)
@@ -328,6 +330,10 @@ function Camera.PlaceCrosshair()
     crosshairPlacedOn = "screen"
 end
 Camera.CrosshairPlacedOn = function() return crosshairPlacedOn end
+-- Where it was put on a nameplate: { anchor, height }. Asked here, not measured:
+-- a frame anchored to a nameplate (a restricted region) can't be measured from
+-- addon code (GetPoint fails: "Can't measure restricted regions", seen in game).
+Camera.CrosshairPlacement = function() return crosshairPlacedOn == "nameplate" and crosshairPlacement or nil end
 
 -- Placed again on the next frame, once, however many reasons came in this frame
 -- (a nameplate going away is still on its unit while its event runs).
