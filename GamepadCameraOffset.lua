@@ -424,10 +424,13 @@ end
 -- for the crosshair color, as the game's own bindings would:
 --   the left stick moves the point on the color wheel (direction = hue, distance
 --   from the middle = saturation; ColorPickerSoftCursor_OnUpdate's mapping);
---   the right stick's up and down change the brightness.
+--   the right stick's up and down change the brightness;
+--   the D-pad's up and down change the opacity, on the picker's own opacity bar,
+--   which the swatch doesn't ask for, so it's put on the picker here when it opens.
 -- Nothing runs while the picker is shut.
 Camera.BRIGHTNESS_PER_SECOND = 0.6   -- full stick: dark to bright in under two seconds
 Camera.WHEEL_PER_SECOND = 0.8        -- full stick: the middle to the wheel's edge in about a second
+Camera.OPACITY_PER_SECOND = 0.5      -- D-pad held: see-through to solid in two seconds (the game's: 0.01 per 0.02 s)
 Camera.STICK_DEAD_ZONE = 0.2
 Camera.PICKER_OPENED_WITHIN = 0.5    -- seconds between the swatch reading the color and the picker showing
 
@@ -446,6 +449,21 @@ function Camera.StickPosition(configNameWanted)
         end
     end
     return 0, 0
+end
+
+-- Whether a controller button is held, by its binding name ("PADDUP", "PADDDOWN").
+function Camera.PadButtonDown(configNameWanted)
+    local gamePad = _G.C_GamePad
+    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function"
+        or type(gamePad.ButtonIndexToConfigName) ~= "function" then return false end
+    local succeeded, state = pcall(gamePad.GetDeviceMappedState)
+    if not (succeeded and type(state) == "table" and type(state.buttons) == "table") then return false end
+    for buttonIndex = 1, state.buttonCount or #state.buttons do
+        if state.buttons[buttonIndex] and gamePad.ButtonIndexToConfigName(buttonIndex - 1) == configNameWanted then
+            return true
+        end
+    end
+    return false
 end
 
 -- The wheel's point for a hue (degrees) and saturation (0 to 1), and back:
@@ -483,8 +501,37 @@ brightnessDriver:SetScript("OnUpdate", function(self, elapsed)
     if newHue ~= hue or newSaturation ~= saturation or newValue ~= value then
         colorSelect:SetColorHSV(newHue, newSaturation, newValue)
     end
+    local opacityDirection = (Camera.PadButtonDown("PADDUP") and 1 or 0) - (Camera.PadButtonDown("PADDDOWN") and 1 or 0)
+    if opacityDirection ~= 0 and type(colorSelect.GetColorAlpha) == "function" then
+        local alpha = colorSelect:GetColorAlpha() or 1
+        local newAlpha = math.max(0, math.min(1, alpha + opacityDirection * Camera.OPACITY_PER_SECOND * elapsed))
+        if newAlpha ~= alpha then
+            colorSelect:SetColorAlpha(newAlpha)
+            Camera.SetCrosshairOpacity(newAlpha * 100)
+        end
+    end
 end)
 Camera.brightnessDriver = brightnessDriver   -- for the tests
+
+-- The picker's opacity bar, as the game's OnShow shows it when asked (hasOpacity),
+-- on the crosshair's opacity. The next picker anyone opens sets these again.
+function Camera.AddOpacityBar(picker)
+    local content = picker.Content
+    local colorSelect = content and content.ColorPicker
+    if not colorSelect or type(colorSelect.SetColorAlpha) ~= "function" then return end
+    local _, _, _, alpha = Camera.ParseColor(getSettings().crosshairColor)
+    alpha = alpha or 1
+    picker.hasOpacity, picker.opacity = true, alpha
+    picker.opacityFunc = function()
+        if type(colorSelect.GetColorAlpha) == "function" then Camera.SetCrosshairOpacity(colorSelect:GetColorAlpha() * 100) end
+    end
+    for _, part in ipairs({ colorSelect.Alpha, colorSelect.AlphaThumb, content.AlphaBackground }) do
+        if type(part) == "table" and part.Show then part:Show() end
+    end
+    colorSelect:SetColorAlpha(alpha)
+    if colorSelect.SetWidth then colorSelect:SetWidth(255) end   -- the game's widths with the bar
+    if picker.SetWidth then picker:SetWidth(388) end
+end
 
 local pickerWatched = false
 function Camera.WatchColorPicker()
@@ -494,6 +541,7 @@ function Camera.WatchColorPicker()
     picker:HookScript("OnShow", function()
         local now = type(GetTime) == "function" and GetTime() or nil
         local ours = pickerAskedAt and now and now - pickerAskedAt <= Camera.PICKER_OPENED_WITHIN
+        if ours then Camera.AddOpacityBar(picker) end
         if ours and isControllerUIOn() then brightnessDriver:Show() else brightnessDriver:Hide() end
     end)
     picker:HookScript("OnHide", function() brightnessDriver:Hide() end)
@@ -611,19 +659,15 @@ function Camera.RegisterSettings()
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
     -- The crosshair's color: the settings page's own swatch (it opens the game's
-    -- color picker itself), then its opacity, both on the one RRGGBBAA value.
+    -- color picker itself, with the opacity bar added), on the one RRGGBBAA value.
     if type(Settings.RegisterProxySetting) == "function" and type(Settings.CreateColorSwatch) == "function" then
         Camera.WatchColorPicker()
         local colorSetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairSwatch",
             Settings.VarType.String, "Crosshair color", "FFFFFFFF", Camera.SwatchColor, Camera.SetSwatchColor)
         Settings.CreateColorSwatch(category, colorSetting,
-            "The controller's aiming dot's color, e.g. to see it better on the ground. "
+            "The controller's aiming dot's color and opacity, e.g. to see it better on the ground. "
+            .. "On a controller: left stick for the color, right stick for the brightness, D-pad up and down for the opacity. "
             .. "Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.")
-        local opacitySetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairOpacity",
-            Settings.VarType.Number, "Crosshair opacity", 100, Camera.CrosshairOpacity, Camera.SetCrosshairOpacity)
-        Settings.CreateSlider(category, opacitySetting, sliderOptions(0, 100, 5, function(value)
-            return string.format("%d%%", math.floor((tonumber(value) or 0) + 0.5))
-        end), "How solid the controller's aiming dot is: 100% is solid, lower lets the world show through.")
     end
 
     Settings.RegisterAddOnCategory(category)

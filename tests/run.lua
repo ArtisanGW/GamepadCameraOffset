@@ -129,16 +129,28 @@ local function boot(gamepad, saved)
         HookScript = function(_, script, fn) game.picker.hooks[script] = fn end,
         Show = function() game.picker.shown = true; if game.picker.hooks.OnShow then game.picker.hooks.OnShow() end end,
         Hide = function() game.picker.shown = false; if game.picker.hooks.OnHide then game.picker.hooks.OnHide() end end,
-        Content = { ColorPicker = {
-            GetColorHSV = function() return game.picker.hsv[1], game.picker.hsv[2], game.picker.hsv[3] end,
-            SetColorHSV = function(_, h, s, v) game.picker.hsv = { h, s, v } end,
-        } },
+        Content = {
+            ColorPicker = {
+                GetColorHSV = function() return game.picker.hsv[1], game.picker.hsv[2], game.picker.hsv[3] end,
+                SetColorHSV = function(_, h, s, v) game.picker.hsv = { h, s, v } end,
+                GetColorAlpha = function() return game.picker.alpha end,
+                SetColorAlpha = function(_, a) game.picker.alpha = a end,
+                SetWidth = function() end,
+                Alpha = { Show = function() game.picker.barShown = true end },
+                AlphaThumb = { Show = function() end },
+            },
+            AlphaBackground = { Show = function() end },
+        },
+        SetWidth = function() end,
     }
     game.cameraStickY, game.moveStickX, game.moveStickY = 0, 0, 0
+    game.padUp, game.padDown = false, false
     _G.C_GamePad = {
         GetDeviceMappedState = function()
-            return { stickCount = 2, sticks = { { x = game.moveStickX, y = game.moveStickY }, { x = 0, y = game.cameraStickY } } }
+            return { stickCount = 2, sticks = { { x = game.moveStickX, y = game.moveStickY }, { x = 0, y = game.cameraStickY } },
+                buttonCount = 3, buttons = { false, game.padUp, game.padDown } }
         end,
+        ButtonIndexToConfigName = function(index) return ({ [0] = "PAD1", [1] = "PADDUP", [2] = "PADDDOWN" })[index] end,
         StickIndexToConfigName = function(index) return index == 0 and "Movement" or "Camera" end,
     }
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
@@ -384,8 +396,21 @@ test("controller: while the color picker is open for the crosshair color, the le
     ColorPickerFrame:Hide()
     game.swatch.getValue()   -- the swatch reads the color as it opens the picker
     game.time = game.time + 0.1
+    SlashCmdList.GAMEPADCAMERAOFFSET("color FFFFFF80")
     ColorPickerFrame:Show()
     eq(driver.shown, true, "opened for the crosshair color: the right stick drives the brightness")
+    eq(ColorPickerFrame.hasOpacity, true, "the opacity bar put on the picker")
+    eq(game.picker.barShown, true)
+    near(game.picker.alpha, 128 / 255, "at the crosshair's opacity")
+    game.padUp = true; step(0.5)
+    near(game.picker.alpha, 128 / 255 + 0.25, "D-pad up: more solid (0.5 a second)")
+    eq(GamepadCameraOffsetDB.crosshairColor:sub(7, 8), string.format("%02X", math.floor((128 / 255 + 0.25) * 255 + 0.5)),
+        "and the crosshair with it")
+    game.padUp, game.padDown = false, true; step(10)
+    near(game.picker.alpha, 0, "D-pad down: see-through, not past 0")
+    game.padDown = false
+    ColorPickerFrame.opacityFunc()   -- the mouse on the bar: the picker's own callback
+    eq(GamepadCameraOffsetDB.crosshairColor:sub(7, 8), "00")
     game.cameraStickY = 1; step(0.5)
     near(game.picker.hsv[3], 0.8, "stick up: brighter (0.6 a second)")
     eq(game.picker.hsv[1], 120, "the hue kept")
@@ -440,13 +465,12 @@ test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or the settings s
     eq(GamepadCameraOffsetDB.crosshairColor, "0000FFFF", "the picked color, the opacity kept")
     swatch.setValue("nonsense")
     eq(GamepadCameraOffsetDB.crosshairColor, "0000FFFF", "a wrong value changes nothing")
-    eq(opacity.label, "Crosshair opacity"); eq(opacity.getValue(), 100)
-    opacity.setValue(40)
+    eq(opacity, nil, "no separate opacity slider: it's on the picker")
+    GamepadCameraOffset.SetCrosshairOpacity(40)
     eq(GamepadCameraOffsetDB.crosshairColor, "0000FF66", "40% opacity")
     eq(dotColor(), "0.00 0.00 1.00 0.40", "tinted at once")
     swatch.setValue("ffff8000")
     eq(GamepadCameraOffsetDB.crosshairColor, "FF800066", "a new color keeps the opacity")
-    eq(game.options.GamepadCameraOffset_crosshairOpacity.format(40), "40%")
     SlashCmdList.GAMEPADCAMERAOFFSET("color 00FF00FF")
 
     set("crosshair", false)
