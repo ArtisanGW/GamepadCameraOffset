@@ -327,8 +327,9 @@ function Debug.Start()
         checks = {},
         stepNumber = 0,
     }
-    say(string.format("running %d steps, about %d s. Don't touch the camera; accept the game's "
-        .. "experimental camera warning if it shows.", #STEPS, math.ceil(#STEPS * Debug.SECONDS_BETWEEN_STEPS)))
+    -- (No word about the game's experimental camera warning: the addon hides it.)
+    say(string.format("running %d steps, about %d s. Don't touch the camera.", #STEPS,
+        math.ceil(#STEPS * Debug.SECONDS_BETWEEN_STEPS)))
     runNextStep()
 end
 
