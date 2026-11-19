@@ -15,137 +15,156 @@
 -- session shows the game's "experimental feature" warning. Its Disable button
 -- clears them again; GamepadCameraOffset leaves them cleared until you change a setting
 -- or reload.
-local ADDON = ...
+local ADDON_NAME = ...
 
-local Cam = {
-    HORIZONTAL = "test_cameraOverShoulder",
-    PITCH = "test_cameraDynamicPitch",
-    PAD = "test_cameraDynamicPitchBaseFovPad",
-    PAD_FLYING = "test_cameraDynamicPitchBaseFovPadFlying",
-    CENTERED = "CameraKeepCharacterCentered",
-    REDUCE = "CameraReduceUnexpectedMovement",
+local Camera = {
+    CVAR_OVER_SHOULDER = "test_cameraOverShoulder",
+    CVAR_DYNAMIC_PITCH = "test_cameraDynamicPitch",
+    CVAR_PITCH_PAD = "test_cameraDynamicPitchBaseFovPad",
+    CVAR_PITCH_PAD_FLYING = "test_cameraDynamicPitchBaseFovPadFlying",
+    CVAR_KEEP_CENTERED = "CameraKeepCharacterCentered",
+    CVAR_REDUCE_MOVEMENT = "CameraReduceUnexpectedMovement",
     -- What Blizzard's controller UI puts on the temp layer (Core.lua), put back on disable.
-    PAD_TEMP = { CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" },
-    -- Every slider is a percentage. side: -100 (left) to 100 (right), 100% being
-    -- SIDE_YARDS. height: 0 to 100, 100% being HEIGHT_MAX of the view kept above
-    -- the character. aim: -25 (down) to 25 (up), in percent of the screen height.
+    CONTROLLER_TEMPORARY_VALUES = { CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" },
+
+    -- Every slider is a percentage.
+    --   side:   -100 (left shoulder) to 100 (right shoulder); 100% is SIDE_YARDS_AT_FULL.
+    --   height: 0 to 100; 100% is HEIGHT_PAD_AT_FULL of the view kept above the character.
+    --   aim:    -25 (down) to 25 (up), in percent of the screen's height.
     DEFAULTS = { enabled = true, side = 40, height = 35, crosshair = true, aim = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
-    HEIGHT_MIN = 0, HEIGHT_MAX_PCT = 100, HEIGHT_STEP = 5,
+    HEIGHT_MIN = 0, HEIGHT_MAX = 100, HEIGHT_STEP = 5,
     AIM_MIN = -25, AIM_MAX = 25, AIM_STEP = 1,
-    SIDE_YARDS = 3,      -- test_cameraOverShoulder at 100%
-    HEIGHT_MAX = 0.9,    -- test_cameraDynamicPitchBaseFovPad at 100%
+    SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
+    HEIGHT_PAD_AT_FULL = 0.9,     -- test_cameraDynamicPitchBaseFovPad at 100%
+
     -- Where the character sits on screen. The camera aims at the character, then
     -- slides sideways by the shoulder offset, so the character sits that many
     -- yards left of the middle, seen from the zoom distance. At cameraFov 90 the
     -- view is 90 degrees across a 4:3 screen, so tan(half its height) is 3/4 of
-    -- tan(half the fov).
-    FOV = 90,                  -- cameraFov when the CVar can't be read
-    FOV_HEIGHT = 0.75,         -- 4:3: the height's share of the width
-    MIN_ZOOM = 1.5,            -- yards; closer counts as this (first person)
-    MOVE = 0.5,                -- UI units the crosshair must move before it's placed again
+    -- tan(half the field of view).
+    DEFAULT_FIELD_OF_VIEW = 90,        -- cameraFov when the CVar can't be read
+    SCREEN_HEIGHT_TO_WIDTH = 0.75,     -- 4:3: the height's share of the width
+    MINIMUM_ZOOM_YARDS = 1.5,          -- closer counts as this (first person)
+    CROSSHAIR_MOVE_THRESHOLD = 0.5,    -- UI units the crosshair must move before it's placed again
 }
-_G.GamepadCameraOffset = Cam
+_G.GamepadCameraOffset = Camera
 
-local CV = C_CVar or {}
+local cvarApi = C_CVar or {}
 
-local function get(name)
-    local fn = CV.GetCVar or GetCVar
-    local ok, v = pcall(fn, name)
-    return ok and v or nil
+-- CVars
+
+local function getCVar(name)
+    local getter = cvarApi.GetCVar or GetCVar
+    local succeeded, value = pcall(getter, name)
+    return succeeded and value or nil
 end
 
-local function set(name, value)
-    local fn = CV.SetCVar or SetCVar
-    pcall(fn, name, tostring(value))
+local function setCVar(name, value)
+    local setter = cvarApi.SetCVar or SetCVar
+    pcall(setter, name, tostring(value))
 end
 
-local function setTemp(name, value)
-    if type(CV.SetTempCVar) == "function" then pcall(CV.SetTempCVar, name, tostring(value)) end
+local function setTemporaryCVar(name, value)
+    if type(cvarApi.SetTempCVar) == "function" then pcall(cvarApi.SetTempCVar, name, tostring(value)) end
 end
 
-local function dropTemp(name)
-    if type(CV.RemoveTempCVar) == "function" then pcall(CV.RemoveTempCVar, name) end
+local function removeTemporaryCVar(name)
+    if type(cvarApi.RemoveTempCVar) == "function" then pcall(cvarApi.RemoveTempCVar, name) end
 end
 
-local function default(name, fallback)
-    local fn = CV.GetCVarDefault or GetCVarDefault
-    if type(fn) ~= "function" then return fallback end
-    local ok, v = pcall(fn, name)
-    return ok and v or fallback
+local function getCVarDefault(name, fallback)
+    local getter = cvarApi.GetCVarDefault or GetCVarDefault
+    if type(getter) ~= "function" then return fallback end
+    local succeeded, value = pcall(getter, name)
+    return succeeded and value or fallback
 end
 
-local function controllerUI()
+local function isControllerUIOn()
     return type(InputUtil) == "table" and type(InputUtil.IsGamepadUIEnabled) == "function"
         and InputUtil.IsGamepadUIEnabled() == true
 end
 
-local function round(v, step) return math.floor(v / step + 0.5) * step end
+-- Saved settings
+
+local function roundToStep(value, step) return math.floor(value / step + 0.5) * step end
+
+local function clamp(value, minimum, maximum, fallback)
+    value = tonumber(value)
+    if not value then return fallback end
+    return math.max(minimum, math.min(maximum, value))
+end
 
 -- Settings saved before the sliders were percentages (yards, a 0-0.9 share, UI
 -- units) are converted once, to the nearest step.
-local function migrate(d)
-    local h, v, c = tonumber(d.horizontal), tonumber(d.vertical), tonumber(d.crosshairHeight)
-    if d.side == nil and h then
-        d.side = math.max(Cam.SIDE_MIN, math.min(Cam.SIDE_MAX, round(h / Cam.SIDE_YARDS * 100, Cam.SIDE_STEP)))
+local function convertOldSettings(saved)
+    local oldSideYards = tonumber(saved.horizontal)
+    local oldHeightShare = tonumber(saved.vertical)
+    local oldCrosshairUnits = tonumber(saved.crosshairHeight)
+    if saved.side == nil and oldSideYards then
+        local percent = roundToStep(oldSideYards / Camera.SIDE_YARDS_AT_FULL * 100, Camera.SIDE_STEP)
+        saved.side = clamp(percent, Camera.SIDE_MIN, Camera.SIDE_MAX)
     end
-    if d.height == nil and v then
-        d.height = math.max(Cam.HEIGHT_MIN, math.min(Cam.HEIGHT_MAX_PCT, round(v / Cam.HEIGHT_MAX * 100, Cam.HEIGHT_STEP)))
+    if saved.height == nil and oldHeightShare then
+        local percent = roundToStep(oldHeightShare / Camera.HEIGHT_PAD_AT_FULL * 100, Camera.HEIGHT_STEP)
+        saved.height = clamp(percent, Camera.HEIGHT_MIN, Camera.HEIGHT_MAX)
     end
-    if d.aim == nil and c then
-        local screen = UIParent and UIParent:GetHeight() or 768
-        if not screen or screen <= 0 then screen = 768 end
-        d.aim = math.max(Cam.AIM_MIN, math.min(Cam.AIM_MAX, round(c / screen * 100, Cam.AIM_STEP)))
+    if saved.aim == nil and oldCrosshairUnits then
+        local screenHeight = UIParent and UIParent:GetHeight() or 768
+        if not screenHeight or screenHeight <= 0 then screenHeight = 768 end
+        local percent = roundToStep(oldCrosshairUnits / screenHeight * 100, Camera.AIM_STEP)
+        saved.aim = clamp(percent, Camera.AIM_MIN, Camera.AIM_MAX)
     end
-    d.horizontal, d.vertical, d.crosshairHeight = nil, nil, nil
+    saved.horizontal, saved.vertical, saved.crosshairHeight = nil, nil, nil
 end
 
-local function db()
+local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
-    migrate(GamepadCameraOffsetDB)
-    for k, v in pairs(Cam.DEFAULTS) do
-        if GamepadCameraOffsetDB[k] == nil then GamepadCameraOffsetDB[k] = v end
+    local settings = GamepadCameraOffsetDB
+    convertOldSettings(settings)
+    for key, defaultValue in pairs(Camera.DEFAULTS) do
+        if settings[key] == nil then settings[key] = defaultValue end
     end
-    return GamepadCameraOffsetDB
+    return settings
 end
 
-local function clamp(v, lo, hi, fallback)
-    v = tonumber(v)
-    if not v then return fallback end
-    return math.max(lo, math.min(hi, v))
-end
+-- Applying and removing the offsets
 
 -- Whether GamepadCameraOffset's values are on the camera now (so disabling knows to undo them).
-local applied = false
+local offsetsApplied = false
 
-function Cam.Apply()
-    local d = db()
-    if not d.enabled then return Cam.Remove() end
-    applied = true
-    setTemp(Cam.CENTERED, 0)
-    setTemp(Cam.REDUCE, 0)
-    local side = clamp(d.side, Cam.SIDE_MIN, Cam.SIDE_MAX, Cam.DEFAULTS.side)
-    set(Cam.HORIZONTAL, side / 100 * Cam.SIDE_YARDS)
-    local v = clamp(d.height, Cam.HEIGHT_MIN, Cam.HEIGHT_MAX_PCT, Cam.DEFAULTS.height) / 100 * Cam.HEIGHT_MAX
-    set(Cam.PITCH, v > 0 and 1 or 0)
-    set(Cam.PAD, v)
-    set(Cam.PAD_FLYING, v)
-    Cam.WatchCrosshair()
+function Camera.Apply()
+    local settings = getSettings()
+    if not settings.enabled then return Camera.Remove() end
+    offsetsApplied = true
+    setTemporaryCVar(Camera.CVAR_KEEP_CENTERED, 0)
+    setTemporaryCVar(Camera.CVAR_REDUCE_MOVEMENT, 0)
+
+    local sidePercent = clamp(settings.side, Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.DEFAULTS.side)
+    setCVar(Camera.CVAR_OVER_SHOULDER, sidePercent / 100 * Camera.SIDE_YARDS_AT_FULL)
+
+    local heightPercent = clamp(settings.height, Camera.HEIGHT_MIN, Camera.HEIGHT_MAX, Camera.DEFAULTS.height)
+    local pitchPad = heightPercent / 100 * Camera.HEIGHT_PAD_AT_FULL
+    setCVar(Camera.CVAR_DYNAMIC_PITCH, pitchPad > 0 and 1 or 0)
+    setCVar(Camera.CVAR_PITCH_PAD, pitchPad)
+    setCVar(Camera.CVAR_PITCH_PAD_FLYING, pitchPad)
+
+    Camera.WatchCrosshair()
 end
 
 -- Puts the game's own values back: its defaults for the camera CVars, and on
 -- the temp layer what the controller UI had there (nothing on keyboard).
-function Cam.Remove()
-    if not applied then return Cam.WatchCrosshair() end
-    applied = false
-    set(Cam.HORIZONTAL, default(Cam.HORIZONTAL, "0"))
-    set(Cam.PITCH, default(Cam.PITCH, "0"))
-    set(Cam.PAD, default(Cam.PAD, "0"))
-    set(Cam.PAD_FLYING, default(Cam.PAD_FLYING, "0"))
-    for name, value in pairs(Cam.PAD_TEMP) do
-        if controllerUI() then setTemp(name, value) else dropTemp(name) end
+function Camera.Remove()
+    if not offsetsApplied then return Camera.WatchCrosshair() end
+    offsetsApplied = false
+    setCVar(Camera.CVAR_OVER_SHOULDER, getCVarDefault(Camera.CVAR_OVER_SHOULDER, "0"))
+    setCVar(Camera.CVAR_DYNAMIC_PITCH, getCVarDefault(Camera.CVAR_DYNAMIC_PITCH, "0"))
+    setCVar(Camera.CVAR_PITCH_PAD, getCVarDefault(Camera.CVAR_PITCH_PAD, "0"))
+    setCVar(Camera.CVAR_PITCH_PAD_FLYING, getCVarDefault(Camera.CVAR_PITCH_PAD_FLYING, "0"))
+    for name, controllerValue in pairs(Camera.CONTROLLER_TEMPORARY_VALUES) do
+        if isControllerUIOn() then setTemporaryCVar(name, controllerValue) else removeTemporaryCVar(name) end
     end
-    Cam.WatchCrosshair()
+    Camera.WatchCrosshair()
 end
 
 -- The crosshair: the controller UI's GamepadReticle, a small dot Blizzard puts
@@ -155,188 +174,212 @@ end
 -- Moving it only moves the dot: what the controller's soft targeting picks is
 -- decided by the game, not by the dot.
 
-local function plain(v)
-    if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
-    return v
+-- Secret values (hidden from addons in some situations) can't be used in math.
+local function readableOrNil(value)
+    if type(issecretvalue) == "function" and issecretvalue(value) then return nil end
+    return value
 end
 
-local function number(name)
-    return tonumber(plain(get(name)))
+local function getCVarNumber(name)
+    return tonumber(readableOrNil(getCVar(name)))
 end
 
 -- The character's offset from the screen's middle, in UIParent units (x only:
 -- the height setting tilts the camera around the character, which stays on
 -- the middle line).
-function Cam.CharacterX()
-    local shoulder = number(Cam.HORIZONTAL) or 0
-    if shoulder == 0 then return 0 end
-    local zoom = type(GetCameraZoom) == "function" and tonumber(plain(GetCameraZoom())) or nil
+function Camera.CharacterX()
+    local shoulderYards = getCVarNumber(Camera.CVAR_OVER_SHOULDER) or 0
+    if shoulderYards == 0 then return 0 end
+    local zoom = type(GetCameraZoom) == "function" and tonumber(readableOrNil(GetCameraZoom())) or nil
     if not zoom then return nil end
-    local fov = number("cameraFov") or Cam.FOV
-    if fov <= 0 then fov = Cam.FOV end
-    local tanHalfHeight = Cam.FOV_HEIGHT * math.tan(math.rad(fov) / 2)
-    local perYard = UIParent:GetHeight() / (2 * math.max(zoom, Cam.MIN_ZOOM) * tanHalfHeight)
-    return -shoulder * perYard
+    local fieldOfView = getCVarNumber("cameraFov") or Camera.DEFAULT_FIELD_OF_VIEW
+    if fieldOfView <= 0 then fieldOfView = Camera.DEFAULT_FIELD_OF_VIEW end
+    local tangentOfHalfHeight = Camera.SCREEN_HEIGHT_TO_WIDTH * math.tan(math.rad(fieldOfView) / 2)
+    local distance = math.max(zoom, Camera.MINIMUM_ZOOM_YARDS)
+    local unitsPerYard = UIParent:GetHeight() / (2 * distance * tangentOfHalfHeight)
+    return -shoulderYards * unitsPerYard
 end
 
-local reticle   -- { x, y } where it was last put, or nil when it's Blizzard's
+local lastCrosshairPosition   -- { x, y } where it was last put, or nil when Blizzard placed it
 
-local function reticleOn()
-    local d = db()
-    return d.enabled and d.crosshair and controllerUI() and type(GamepadReticle) == "table"
+local function shouldMoveCrosshair()
+    local settings = getSettings()
+    return settings.enabled and settings.crosshair and isControllerUIOn() and type(GamepadReticle) == "table"
 end
 
-local function centerY(r)
-    local scale = r:GetEffectiveScale()
+-- The height the game aims at, in the crosshair frame's units.
+local function getAimHeight(crosshairFrame)
+    local scale = crosshairFrame:GetEffectiveScale()
     if type(GetCursorCenterPosition) ~= "function" or not scale or scale <= 0 then return nil end
-    local _, y = GetCursorCenterPosition()
-    y = tonumber(plain(y))
-    return y and y / scale or nil
+    local _, aimY = GetCursorCenterPosition()
+    aimY = tonumber(readableOrNil(aimY))
+    return aimY and aimY / scale or nil
 end
 
-function Cam.PlaceCrosshair(force)
-    local r = _G.GamepadReticle
-    if not reticleOn() then
-        if reticle and type(r) == "table" then
-            reticle = nil
-            if type(r.Recenter) == "function" then r:Recenter() end
+function Camera.PlaceCrosshair(forced)
+    local crosshairFrame = _G.GamepadReticle
+    if not shouldMoveCrosshair() then
+        if lastCrosshairPosition and type(crosshairFrame) == "table" then
+            lastCrosshairPosition = nil
+            if type(crosshairFrame.Recenter) == "function" then crosshairFrame:Recenter() end
         end
         return
     end
-    local x, y = Cam.CharacterX(), centerY(r)
+    local x, y = Camera.CharacterX(), getAimHeight(crosshairFrame)
     if not x or not y then return end
-    local aim = clamp(db().aim, Cam.AIM_MIN, Cam.AIM_MAX, 0)
-    y = y + aim / 100 * UIParent:GetHeight()
-    if not force and reticle and math.abs(reticle.x - x) < Cam.MOVE and math.abs(reticle.y - y) < Cam.MOVE then return end
-    reticle = { x = x, y = y }
-    r:ClearAllPoints()
-    r:SetPoint("CENTER", UIParent, "BOTTOM", x, y)
+    local aimPercent = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
+    y = y + aimPercent / 100 * UIParent:GetHeight()
+    local last = lastCrosshairPosition
+    local barelyMoved = last and math.abs(last.x - x) < Camera.CROSSHAIR_MOVE_THRESHOLD
+        and math.abs(last.y - y) < Camera.CROSSHAIR_MOVE_THRESHOLD
+    if barelyMoved and not forced then return end
+    lastCrosshairPosition = { x = x, y = y }
+    crosshairFrame:ClearAllPoints()
+    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", x, y)
 end
 
 -- Follows the zoom every frame while the crosshair is on (placing it only when
 -- it moved), and takes it back after Blizzard's own Recenter.
-local follower = CreateFrame("Frame")
-follower:Hide()   -- shown by WatchCrosshair, once the saved settings are in
-follower:SetScript("OnUpdate", function(self)
-    Cam.PlaceCrosshair()
-    if not reticleOn() then self:Hide() end
+local crosshairFollower = CreateFrame("Frame")
+crosshairFollower:Hide()   -- shown by WatchCrosshair, once the saved settings are in
+crosshairFollower:SetScript("OnUpdate", function(self)
+    Camera.PlaceCrosshair()
+    if not shouldMoveCrosshair() then self:Hide() end
 end)
-local hooked = false
-function Cam.WatchCrosshair()
-    local r = _G.GamepadReticle
-    if not hooked and type(r) == "table" and type(r.Recenter) == "function" and type(hooksecurefunc) == "function" then
-        hooked = true
-        hooksecurefunc(r, "Recenter", function()
-            if reticleOn() then Cam.PlaceCrosshair(true) else reticle = nil end
+
+local recenterHooked = false
+function Camera.WatchCrosshair()
+    local crosshairFrame = _G.GamepadReticle
+    local canHook = type(crosshairFrame) == "table" and type(crosshairFrame.Recenter) == "function"
+        and type(hooksecurefunc) == "function"
+    if not recenterHooked and canHook then
+        recenterHooked = true
+        hooksecurefunc(crosshairFrame, "Recenter", function()
+            if shouldMoveCrosshair() then Camera.PlaceCrosshair(true) else lastCrosshairPosition = nil end
         end)
     end
-    if reticleOn() then follower:Show() else follower:Hide() end
-    Cam.PlaceCrosshair(true)
+    if shouldMoveCrosshair() then crosshairFollower:Show() else crosshairFollower:Hide() end
+    Camera.PlaceCrosshair(true)
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
-local pending = false
-function Cam.Soon()
-    if pending then return end
-    pending = true
+local applyQueued = false
+function Camera.ApplyNextFrame()
+    if applyQueued then return end
+    applyQueued = true
     C_Timer.After(0, function()
-        pending = false
-        Cam.Apply()
+        applyQueued = false
+        Camera.Apply()
     end)
 end
+
+-- For Debug.lua (/gco debug), which checks what these actually did.
+Camera.GetSettings = getSettings
+Camera.GetCVar = getCVar
+Camera.GetCVarDefault = getCVarDefault
+Camera.IsControllerUIOn = isControllerUIOn
+Camera.GetAimHeight = getAimHeight
 
 -- Settings: Options > AddOns > GamepadCameraOffset
 
 -- A slider's label: zero as a word ("Centered", "Normal"), the rest as a whole
 -- percentage with a direction ("40% right", "10% down").
-function Cam.Label(v, zero, up, down)
-    local pct = math.floor(math.abs(tonumber(v) or 0) + 0.5)
-    if pct == 0 then return zero end
-    return string.format("%d%% %s", pct, ((tonumber(v) or 0) < 0 and down) or up)
+function Camera.Label(value, zeroWord, positiveWord, negativeWord)
+    local number = tonumber(value) or 0
+    local percent = math.floor(math.abs(number) + 0.5)
+    if percent == 0 then return zeroWord end
+    local direction = (number < 0 and negativeWord) or positiveWord
+    return string.format("%d%% %s", percent, direction)
 end
 
-local function sliderOptions(lo, hi, step, format)
-    local o = Settings.CreateSliderOptions(lo, hi, step)
-    local right = MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label
+local function sliderOptions(minimum, maximum, step, formatLabel)
+    local options = Settings.CreateSliderOptions(minimum, maximum, step)
+    local rightLabel = MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label
         and MinimalSliderWithSteppersMixin.Label.Right
-    if right and o.SetLabelFormatter then o:SetLabelFormatter(right, format) end
-    return o
+    if rightLabel and options.SetLabelFormatter then options:SetLabelFormatter(rightLabel, formatLabel) end
+    return options
 end
 
-function Cam.RegisterSettings()
+function Camera.RegisterSettings()
     if not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting) then return end
-    local d = db()
+    local settings = getSettings()
     local category = Settings.RegisterVerticalLayoutCategory("GamepadCameraOffset")
-    Cam.category = category
+    Camera.category = category
 
-    local function add(key, kind, label, tooltip, options)
-        local variable = "GamepadCameraOffset_" .. key
-        local setting = Settings.RegisterAddOnSetting(category, variable, key, d, kind, label, Cam.DEFAULTS[key])
-        Settings.SetOnValueChangedCallback(variable, function() Cam.Apply() end)
-        if kind == Settings.VarType.Boolean then
+    local function addSetting(key, valueType, label, tooltip, options)
+        local variableName = "GamepadCameraOffset_" .. key
+        local setting = Settings.RegisterAddOnSetting(category, variableName, key, settings, valueType, label,
+            Camera.DEFAULTS[key])
+        Settings.SetOnValueChangedCallback(variableName, function() Camera.Apply() end)
+        if valueType == Settings.VarType.Boolean then
             Settings.CreateCheckbox(category, setting, tooltip)
         else
             Settings.CreateSlider(category, setting, options, tooltip)
         end
     end
 
-    add("enabled", Settings.VarType.Boolean, "Enable",
+    addSetting("enabled", Settings.VarType.Boolean, "Enable",
         "Moves the camera with the settings below, on keyboard and on a controller. "
         .. "Turned off, the game's own camera comes back.\n\n"
         .. "These are the game's experimental camera settings: the first change in a "
         .. "session shows its warning. Accept keeps them.")
-    add("side", Settings.VarType.Number, "Side offset",
+    addSetting("side", Settings.VarType.Number, "Side offset",
         "Moves the camera over your right or left shoulder. Centered is the game's normal view; "
         .. "100% is the furthest the addon goes. The effect is stronger when you zoom in.",
-        sliderOptions(Cam.SIDE_MIN, Cam.SIDE_MAX, Cam.SIDE_STEP,
-            function(v) return Cam.Label(v, "Centered", "right", "left") end))
-    add("height", Settings.VarType.Number, "Height",
+        sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
+            function(value) return Camera.Label(value, "Centered", "right", "left") end))
+    addSetting("height", Settings.VarType.Number, "Height",
         "Raises the camera's view so your character sits lower on the screen. Normal is the game's "
         .. "own view; 100% is the furthest the addon goes. The effect is stronger when you zoom out.",
-        sliderOptions(Cam.HEIGHT_MIN, Cam.HEIGHT_MAX_PCT, Cam.HEIGHT_STEP,
-            function(v) return Cam.Label(v, "Normal", "higher") end))
-    add("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
+        sliderOptions(Camera.HEIGHT_MIN, Camera.HEIGHT_MAX, Camera.HEIGHT_STEP,
+            function(value) return Camera.Label(value, "Normal", "higher") end))
+    addSetting("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
         "With the controller UI on, moves its aiming dot sideways so it stays in line with "
         .. "your character as the side offset and your zoom change. Only the dot moves: "
         .. "what the controller targets is still decided by the game.")
-    add("aim", Settings.VarType.Number, "Crosshair height",
+    addSetting("aim", Settings.VarType.Number, "Crosshair height",
         "Moves the controller's aiming dot up or down from where the game puts it, "
         .. "in percent of the screen's height. Normal is the game's own place.",
-        sliderOptions(Cam.AIM_MIN, Cam.AIM_MAX, Cam.AIM_STEP,
-            function(v) return Cam.Label(v, "Normal", "up", "down") end))
+        sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
+            function(value) return Camera.Label(value, "Normal", "up", "down") end))
 
     Settings.RegisterAddOnCategory(category)
 end
 
-function Cam.Open()
-    if Cam.category and Settings and Settings.OpenToCategory then
-        Settings.OpenToCategory(Cam.category:GetID())
+function Camera.Open()
+    if Camera.category and Settings and Settings.OpenToCategory then
+        Settings.OpenToCategory(Camera.category:GetID())
     end
 end
 
 -- Events
 
-local events = CreateFrame("Frame")
-events:RegisterEvent("ADDON_LOADED")
-events:RegisterEvent("PLAYER_ENTERING_WORLD")
-events:RegisterEvent("CVAR_UPDATE")
-events:SetScript("OnEvent", function(_, event, name)
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("ADDON_LOADED")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("CVAR_UPDATE")
+eventFrame:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" then
-        if name ~= ADDON then return end
-        events:UnregisterEvent("ADDON_LOADED")
-        db()
-        pcall(Cam.RegisterSettings)
+        if name ~= ADDON_NAME then return end
+        eventFrame:UnregisterEvent("ADDON_LOADED")
+        getSettings()
+        pcall(Camera.RegisterSettings)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- The controller UI sets its temp values around now too: apply after it.
-        Cam.Soon()
+        Camera.ApplyNextFrame()
     elseif event == "CVAR_UPDATE" then
         -- The game took the camera back (a reload, a switch to the controller).
-        if type(name) == "string" and name:lower() == Cam.CENTERED:lower()
-            and db().enabled and get(Cam.CENTERED) ~= "0" then
-            Cam.Soon()
+        local isCenteringCVar = type(name) == "string" and name:lower() == Camera.CVAR_KEEP_CENTERED:lower()
+        if isCenteringCVar and getSettings().enabled and getCVar(Camera.CVAR_KEEP_CENTERED) ~= "0" then
+            Camera.ApplyNextFrame()
         end
     end
 end)
 
+-- /gco opens the settings; /gco debug ... goes to the debug suite (Debug.lua).
 SLASH_GAMEPADCAMERAOFFSET1 = "/gco"
-SlashCmdList.GAMEPADCAMERAOFFSET = function() Cam.Open() end
+SlashCmdList.GAMEPADCAMERAOFFSET = function(message)
+    local command, arguments = tostring(message or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+    if command == "debug" and Camera.Debug then return Camera.Debug.Command(arguments) end
+    Camera.Open()
+end
