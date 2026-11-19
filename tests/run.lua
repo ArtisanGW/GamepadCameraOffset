@@ -106,6 +106,7 @@ local function boot(gamepad, saved)
     -- Units and their nameplates: game.units[unit] = true, game.nameplates[unit] = a frame.
     game.units, game.nameplates = {}, {}
     _G.UnitExists = function(unit) return game.units[unit] == true end
+    _G.GetPhysicalScreenSize = function() return 2304, 1536 end
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
@@ -135,7 +136,7 @@ test("registers its page under Options > AddOns, with the defaults", function()
     eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50); eq(GamepadCameraOffsetDB.aim, 0)
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
     eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
-    eq(game.options.aim.format(10), "10% up"); eq(game.options.aim.format(-5), "5% down"); eq(game.options.aim.format(0), "Default")
+    eq(game.options.aim.format(10), "10 px up"); eq(game.options.aim.format(-5), "5 px down"); eq(game.options.aim.format(0), "Default")
     SlashCmdList.GAMEPADCAMERAOFFSET("")
     eq(game.opened, 42, "/gco opens it")
 end)
@@ -269,8 +270,9 @@ test("controller, a target: the crosshair goes under its nameplate, re-placed on
     game.fire("PLAYER_SOFT_ENEMY_CHANGED"); frame()
     eq(GamepadReticle.point.relativeTo, softPlate, "no target of yours: the controller's soft target")
     eq(GamepadReticle.point[2], "BOTTOM"); eq(GamepadReticle.point[4], -12, "just below the nameplate")
-    set("aim", -5)
-    near(GamepadReticle.point[4], -12 - 0.05 * 768, "the vertical offset: 5% of the screen down from there")
+    set("aim", -30)
+    -- 30 px on a 1536 px tall screen: 15 of its 768 units, at the crosshair's scale 1.5: 10
+    near(GamepadReticle.point[4], -12 - 10, "the vertical offset: 30 px down from there")
     eq(GamepadReticle.point.relativeTo, softPlate, "still on the nameplate")
     set("aim", 0)
     game.units.target = true; game.nameplates.target = targetPlate

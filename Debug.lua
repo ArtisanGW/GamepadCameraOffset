@@ -84,14 +84,14 @@ end
 
 -- With a target, the crosshair is on its nameplate; with none, in the middle at
 -- the game's aim height, whatever the side offset (the vertical offset is for targets).
-local function checkCrosshair(label, aimPercent)
+local function checkCrosshair(label, offsetPixels)
     local name = "crosshair at " .. label
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
     if Camera.CrosshairTargetNameplate() then
         local _, anchoredTo, _, _, heightFromNameplate = GamepadReticle:GetPoint(1)
         expectEqual(name .. ": on the target's nameplate", true, anchoredTo == Camera.CrosshairTargetNameplate())
         return expectNear(name .. ": height from the nameplate",
-            -Camera.CROSSHAIR_BELOW_NAMEPLATE + aimPercent / 100 * UIParent:GetHeight(), heightFromNameplate, 1)
+            -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(GamepadReticle, offsetPixels), heightFromNameplate, 1)
     end
     local aimHeight = Camera.GetAimHeight(GamepadReticle)
     if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end
@@ -153,10 +153,10 @@ for _, lookDownPercent in ipairs({ 0, 50, 100 }) do
     end)
 end
 
-for _, aimPercent in ipairs({ 10, -10, 0 }) do
+for _, offsetPixels in ipairs({ 40, -40, 0 }) do
     addStep(function()
-        changeSettings({ side = 50, aim = aimPercent })
-        checkCrosshair("crosshair vertical offset " .. Camera.Label(aimPercent, "Default", "up", "down"), aimPercent)
+        changeSettings({ side = 50, aim = offsetPixels })
+        checkCrosshair("crosshair vertical offset " .. Camera.Label(offsetPixels, "Default", "up", "down", "px"), offsetPixels)
     end)
 end
 

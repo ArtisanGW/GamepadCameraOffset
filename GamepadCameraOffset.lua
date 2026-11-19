@@ -47,13 +47,15 @@ local Camera = {
     --   lookDown: 1 to 100, how much of the tilt stays when you look down at your
     --           character (the game's DownScale, 0 to 1). 0 is Default: the game's
     --           own DownScale (0.25).
-    --   aim:    the crosshair's height on a target: -25 (down) to 25 (up) from just
-    --           below its nameplate, in percent of the screen's height.
+    --   aim:    the crosshair's vertical offset on a target: -200 (down) to 200 (up)
+    --           screen pixels from just below its nameplate. Pixels, not a percentage:
+    --           a nameplate keeps its size on screen at any distance, so a pixel
+    --           offset puts the dot at the same place on it.
     DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
-    AIM_MIN = -25, AIM_MAX = 25, AIM_STEP = 1,
+    AIM_MIN = -200, AIM_MAX = 200, AIM_STEP = 5,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
     -- tilts. Seen in game (DevCamOffset's tilt test, screenshots at 4, 15 and 39
@@ -251,6 +253,21 @@ local function getAimHeight(crosshairFrame)
     return aimY and aimY / scale or nil
 end
 
+-- Screen pixels as a frame's own units: the screen is 768 units tall at an
+-- effective scale of 1, whatever its pixels (GetPhysicalScreenSize).
+Camera.SCREEN_HEIGHT_IN_UNITS = 768
+function Camera.PixelsToFrameUnits(frame, pixels)
+    local scale = frame:GetEffectiveScale()
+    if not scale or scale <= 0 then scale = 1 end
+    local physicalHeight
+    if type(GetPhysicalScreenSize) == "function" then
+        local _, height = GetPhysicalScreenSize()
+        physicalHeight = tonumber(readableOrNil(height))
+    end
+    if not physicalHeight or physicalHeight <= 0 then physicalHeight = Camera.SCREEN_HEIGHT_IN_UNITS end
+    return pixels * Camera.SCREEN_HEIGHT_IN_UNITS / physicalHeight / scale
+end
+
 -- The nameplate of the first of CROSSHAIR_TARGET_UNITS that has one, and that unit.
 function Camera.CrosshairTargetNameplate()
     local namePlates = _G.C_NamePlate
@@ -275,8 +292,8 @@ function Camera.PlaceCrosshair()
     end
     local nameplate = Camera.CrosshairTargetNameplate()
     if nameplate then
-        local aimPercent = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
-        local heightFromNameplate = -Camera.CROSSHAIR_BELOW_NAMEPLATE + aimPercent / 100 * UIParent:GetHeight()
+        local offsetPixels = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
+        local heightFromNameplate = -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(crosshairFrame, offsetPixels)
         crosshairFrame:ClearAllPoints()
         crosshairFrame:SetPoint("CENTER", nameplate, "BOTTOM", 0, heightFromNameplate)
         crosshairPlacedOn = "nameplate"
@@ -346,14 +363,15 @@ Camera.GetAimHeight = getAimHeight
 
 -- Settings: Options > AddOns > Gamepad Camera Offset
 
--- A slider's label: zero as a word ("Centered", "Normal"), the rest as a whole
--- percentage with a direction ("40% right", "10% down").
-function Camera.Label(value, zeroWord, positiveWord, negativeWord)
+-- A slider's label: zero as a word ("Centered", "Default"), the rest as a whole
+-- percentage with a direction ("40% right"), or in a unit when given ("20 px down").
+function Camera.Label(value, zeroWord, positiveWord, negativeWord, unit)
     local number = tonumber(value) or 0
-    local percent = math.floor(math.abs(number) + 0.5)
-    if percent == 0 then return zeroWord end
+    local amount = math.floor(math.abs(number) + 0.5)
+    if amount == 0 then return zeroWord end
     local direction = (number < 0 and negativeWord) or positiveWord
-    return string.format("%d%% %s", percent, direction)
+    if unit then return string.format("%d %s %s", amount, unit, direction) end
+    return string.format("%d%% %s", amount, direction)
 end
 
 local function sliderOptions(minimum, maximum, step, formatLabel)
@@ -411,10 +429,10 @@ function Camera.RegisterSettings()
         .. "where the game aims. What the controller targets is still decided by the game.")
     addSetting("aim", Settings.VarType.Number, "Crosshair vertical offset",
         "Moves the controller's aiming dot up or down from just below your target's "
-        .. "nameplate, in percent of the screen's height, e.g. down onto its body. "
+        .. "nameplate, in screen pixels, e.g. down onto its body. "
         .. "Default is just below the nameplate. With no target the dot stays where the game aims.",
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
-            function(value) return Camera.Label(value, "Default", "up", "down") end))
+            function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
     Settings.RegisterAddOnCategory(category)
 end
