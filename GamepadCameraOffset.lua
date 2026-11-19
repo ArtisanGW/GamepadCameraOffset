@@ -418,28 +418,48 @@ function Camera.SwatchColor()
     return "FF" .. (hex or "FFFFFFFF"):sub(1, 6)
 end
 
--- Brightness on the right stick, done here. Opened for an addon's setting, the
--- picker's own right-stick binding never works (the game refuses it: seen in
--- game, while the same picker opened from the chat settings works). So while
--- the picker is open for the crosshair color, the camera stick's up and down
--- change its brightness, the way the game's own binding would. Nothing runs
--- while the picker is shut.
+-- The picker's sticks, done here. Opened for an addon's setting, the picker's
+-- own stick bindings never work (the game refuses them: seen in game, while the
+-- same picker opened from the chat settings works). So while the picker is open
+-- for the crosshair color, as the game's own bindings would:
+--   the left stick moves the point on the color wheel (direction = hue, distance
+--   from the middle = saturation; ColorPickerSoftCursor_OnUpdate's mapping);
+--   the right stick's up and down change the brightness.
+-- Nothing runs while the picker is shut.
 Camera.BRIGHTNESS_PER_SECOND = 0.6   -- full stick: dark to bright in under two seconds
+Camera.WHEEL_PER_SECOND = 0.8        -- full stick: the middle to the wheel's edge in about a second
 Camera.STICK_DEAD_ZONE = 0.2
 Camera.PICKER_OPENED_WITHIN = 0.5    -- seconds between the swatch reading the color and the picker showing
 
-function Camera.CameraStickY()
+-- A stick's x and y, -1 to 1: "Movement" (left) or "Camera" (right). 0, 0 without one.
+function Camera.StickPosition(configNameWanted)
     local gamePad = _G.C_GamePad
-    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function" then return 0 end
+    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function" then return 0, 0 end
     local succeeded, state = pcall(gamePad.GetDeviceMappedState)
-    if not (succeeded and type(state) == "table" and type(state.sticks) == "table") then return 0 end
+    if not (succeeded and type(state) == "table" and type(state.sticks) == "table") then return 0, 0 end
     for stickIndex = 1, state.stickCount or #state.sticks do
         local configName = type(gamePad.StickIndexToConfigName) == "function"
             and gamePad.StickIndexToConfigName(stickIndex - 1) or nil   -- the game's function is 0 based
         local stick = state.sticks[stickIndex]
-        if configName == "Camera" and type(stick) == "table" then return tonumber(stick.y) or 0 end
+        if configName == configNameWanted and type(stick) == "table" then
+            return tonumber(stick.x) or 0, tonumber(stick.y) or 0
+        end
     end
-    return 0
+    return 0, 0
+end
+
+-- The wheel's point for a hue (degrees) and saturation (0 to 1), and back:
+-- hue = the point's angle + 180, saturation = its distance from the middle.
+function Camera.WheelPoint(hue, saturation)
+    local angle = math.rad(hue - 180)
+    return saturation * math.cos(angle), saturation * math.sin(angle)
+end
+
+function Camera.WheelColor(x, y)
+    local distance = math.sqrt(x * x + y * y)
+    if distance > 1 then x, y, distance = x / distance, y / distance, 1 end
+    local hue = math.deg(math.atan2(y, x)) + 180
+    return hue % 360, distance
 end
 
 local brightnessDriver = CreateFrame("Frame")
@@ -448,11 +468,21 @@ brightnessDriver:SetScript("OnUpdate", function(self, elapsed)
     local picker = _G.ColorPickerFrame
     local colorSelect = type(picker) == "table" and picker.Content and picker.Content.ColorPicker
     if not (colorSelect and picker:IsShown()) then return self:Hide() end
-    local stickY = Camera.CameraStickY()
-    if math.abs(stickY) < Camera.STICK_DEAD_ZONE then return end
     local hue, saturation, value = colorSelect:GetColorHSV()
-    local brighter = math.max(0, math.min(1, value + stickY * Camera.BRIGHTNESS_PER_SECOND * elapsed))
-    if brighter ~= value then colorSelect:SetColorHSV(hue, saturation, brighter) end
+    local newHue, newSaturation, newValue = hue, saturation, value
+    local leftX, leftY = Camera.StickPosition("Movement")
+    if math.sqrt(leftX * leftX + leftY * leftY) >= Camera.STICK_DEAD_ZONE then
+        local x, y = Camera.WheelPoint(hue, saturation)
+        newHue, newSaturation = Camera.WheelColor(x + leftX * Camera.WHEEL_PER_SECOND * elapsed,
+            y + leftY * Camera.WHEEL_PER_SECOND * elapsed)
+    end
+    local _, rightY = Camera.StickPosition("Camera")
+    if math.abs(rightY) >= Camera.STICK_DEAD_ZONE then
+        newValue = math.max(0, math.min(1, value + rightY * Camera.BRIGHTNESS_PER_SECOND * elapsed))
+    end
+    if newHue ~= hue or newSaturation ~= saturation or newValue ~= value then
+        colorSelect:SetColorHSV(newHue, newSaturation, newValue)
+    end
 end)
 Camera.brightnessDriver = brightnessDriver   -- for the tests
 

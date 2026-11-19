@@ -134,9 +134,11 @@ local function boot(gamepad, saved)
             SetColorHSV = function(_, h, s, v) game.picker.hsv = { h, s, v } end,
         } },
     }
-    game.cameraStickY = 0
+    game.cameraStickY, game.moveStickX, game.moveStickY = 0, 0, 0
     _G.C_GamePad = {
-        GetDeviceMappedState = function() return { stickCount = 2, sticks = { { y = 0.9 }, { y = game.cameraStickY } } } end,
+        GetDeviceMappedState = function()
+            return { stickCount = 2, sticks = { { x = game.moveStickX, y = game.moveStickY }, { x = 0, y = game.cameraStickY } } }
+        end,
         StickIndexToConfigName = function(index) return index == 0 and "Movement" or "Camera" end,
     }
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
@@ -372,7 +374,7 @@ test("the crosshair goes under the part of the nameplate you see: health bar, el
     eq(GamepadReticle.point.relativeTo, name, "names only (a friendly player): under the name")
 end)
 
-test("controller: while the color picker is open for the crosshair color, the right stick sets its brightness", function()
+test("controller: while the color picker is open for the crosshair color, the left stick moves on the wheel, the right sets brightness", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local driver = GamepadCameraOffset.brightnessDriver
@@ -391,6 +393,22 @@ test("controller: while the color picker is open for the crosshair color, the ri
     near(game.picker.hsv[3], 0, "stick down: darker, not past black")
     game.cameraStickY = 0.1; step(1)
     near(game.picker.hsv[3], 0, "inside the dead zone: nothing")
+    game.cameraStickY = 0
+
+    -- The left stick: the point on the wheel. Hue 0 sits at the point (-1, 0).
+    game.picker.hsv = { 0, 0, 1 }   -- the middle: white
+    game.moveStickX = -1; step(0.5)
+    near(game.picker.hsv[2], 0.4, "left: out from the middle, saturation 0.4 (0.8 a second)")
+    near(game.picker.hsv[1], 0, "toward hue 0")
+    game.moveStickX, game.moveStickY = 0, -1; step(0.5)
+    local x, y = GamepadCameraOffset.WheelPoint(game.picker.hsv[1], game.picker.hsv[2])
+    near(x, -0.4, "down: the point moves down"); near(y, -0.4)
+    game.moveStickX, game.moveStickY = -1, 0; step(10)
+    near(game.picker.hsv[2], 1, "never past the wheel's edge")
+    near(game.picker.hsv[3], 1, "the brightness kept")
+    game.moveStickX, game.moveStickY = 0.1, 0.1; local before = game.picker.hsv[1]; step(1)
+    eq(game.picker.hsv[1], before, "inside the dead zone: nothing")
+    game.moveStickX, game.moveStickY = 0, 0
     ColorPickerFrame:Hide()
     eq(driver.shown, false, "picker shut: nothing runs")
 end)
