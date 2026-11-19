@@ -83,7 +83,7 @@ local function getCrosshairPosition()
 end
 
 -- With a target, the crosshair is on its nameplate; with none, in the middle at
--- the game's aim height plus the height setting, whatever the side offset.
+-- the game's aim height, whatever the side offset (the vertical offset is for targets).
 local function checkCrosshair(label, aimPercent)
     local name = "crosshair at " .. label
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
@@ -97,7 +97,7 @@ local function checkCrosshair(label, aimPercent)
     if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end
     local x, y = getCrosshairPosition()
     expectNear(name .. ": x, in the middle, where the game aims", 0, x, 1)
-    expectNear(name .. ": y, the game's aim height (the height setting is for targets)", aimHeight, y, 1)
+    expectNear(name .. ": y, the game's aim height (the vertical offset is for targets)", aimHeight, y, 1)
 end
 
 -- The steps, one every SECONDS_BETWEEN_STEPS.
@@ -145,8 +145,10 @@ end
 for _, lookDownPercent in ipairs({ 0, 50, 100 }) do
     addStep(function()
         changeSettings({ tilt = 50, lookDown = lookDownPercent })
-        local label = "tilt when looking down " .. Camera.Label(lookDownPercent, "Fades away", "kept")
-        expectNear(label .. ": " .. Camera.CVAR_PITCH_DOWN_SCALE, lookDownPercent / 100,
+        local label = "tilt when looking down " .. Camera.Label(lookDownPercent, "Default", "kept")
+        local expected = lookDownPercent / 100
+        if lookDownPercent == 0 then expected = tonumber(Camera.GetCVarDefault(Camera.CVAR_PITCH_DOWN_SCALE, "0.25")) or 0.25 end
+        expectNear(label .. ": " .. Camera.CVAR_PITCH_DOWN_SCALE, expected,
             Camera.GetCVar(Camera.CVAR_PITCH_DOWN_SCALE))
     end)
 end
@@ -154,7 +156,7 @@ end
 for _, aimPercent in ipairs({ 10, -10, 0 }) do
     addStep(function()
         changeSettings({ side = 50, aim = aimPercent })
-        checkCrosshair("crosshair height on target " .. Camera.Label(aimPercent, "Default", "up", "down"), aimPercent)
+        checkCrosshair("crosshair vertical offset " .. Camera.Label(aimPercent, "Default", "up", "down"), aimPercent)
     end)
 end
 

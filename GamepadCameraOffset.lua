@@ -44,9 +44,9 @@ local Camera = {
     --   side:   -100 (left shoulder) to 100 (right shoulder); 100% is SIDE_YARDS_AT_FULL.
     --   tilt:   0 (off) to 100 (strongest): tilts the camera up, so your character sits
     --           lower on the screen and you see more ahead. See Camera.TiltPad.
-    --   lookDown: 0 to 100, how much of the tilt stays when you look down at your
-    --           character (the game's DownScale, 0 to 1). 0% is the tilt fading
-    --           away entirely as you look down.
+    --   lookDown: 1 to 100, how much of the tilt stays when you look down at your
+    --           character (the game's DownScale, 0 to 1). 0 is Default: the game's
+    --           own DownScale (0.25).
     --   aim:    the crosshair's height on a target: -25 (down) to 25 (up) from just
     --           below its nameplate, in percent of the screen's height.
     DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
@@ -182,7 +182,11 @@ function Camera.Apply()
         setCVar(Camera.CVAR_PITCH_PAD_FLYING, pitchPad)
         local lookDownPercent = clamp(settings.lookDown, Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX,
             Camera.DEFAULTS.lookDown)
-        setCVar(Camera.CVAR_PITCH_DOWN_SCALE, lookDownPercent / 100)
+        if lookDownPercent <= 0 then   -- Default: the game's own
+            setCVar(Camera.CVAR_PITCH_DOWN_SCALE, getCVarDefault(Camera.CVAR_PITCH_DOWN_SCALE, "0.25"))
+        else
+            setCVar(Camera.CVAR_PITCH_DOWN_SCALE, lookDownPercent / 100)
+        end
     else
         setCVar(Camera.CVAR_DYNAMIC_PITCH, 0)
     end
@@ -221,7 +225,7 @@ end
 -- target and nothing here runs per frame. It's placed again only when the target
 -- changes or its nameplate comes or goes. With no target, or no nameplate (they're
 -- off, or the target is off screen), it stays where the game aims. The crosshair
--- height setting moves it up or down from the nameplate. (Following the character instead, as
+-- vertical offset setting moves it up or down from the nameplate. (Following the character instead, as
 -- before, put the dot far from what you were attacking: seen in game.)
 -- It's a plain frame, not a protected one, so it moves in combat too.
 
@@ -395,17 +399,17 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.TILT_MIN, Camera.TILT_MAX, Camera.TILT_STEP,
             function(value) return Camera.Label(value, "Off", "tilt") end))
     addSetting("lookDown", Settings.VarType.Number, "Tilt when looking down",
-        "How much of the tilt stays when you look down at your character. At 0% it fades "
-        .. "away as the camera looks down; at 100% it stays as strong as with a level camera. "
-        .. "Only used while Tilt is on.",
+        "How much of the tilt stays when you look down at your character: the lower, the "
+        .. "more it fades as the camera looks down; at 100% it stays as strong as with a level "
+        .. "camera. Default is the game's own (about 25%). Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
-            function(value) return Camera.Label(value, "Fades away", "kept") end))
+            function(value) return Camera.Label(value, "Default", "kept") end))
     addSetting("crosshair", Settings.VarType.Boolean, "Crosshair on your target",
         "With the controller UI on, puts its aiming dot (and its auto-attack timer) just "
         .. "below your target's nameplate, or the controller's soft target's, so it stays on "
         .. "what you attack as you both move. With no target, or nameplates off, it stays "
         .. "where the game aims. What the controller targets is still decided by the game.")
-    addSetting("aim", Settings.VarType.Number, "Crosshair height on target",
+    addSetting("aim", Settings.VarType.Number, "Crosshair vertical offset",
         "Moves the controller's aiming dot up or down from just below your target's "
         .. "nameplate, in percent of the screen's height, e.g. down onto its body. "
         .. "Default is just below the nameplate. With no target the dot stays where the game aims.",

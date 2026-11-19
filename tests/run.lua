@@ -186,7 +186,9 @@ test("tilt when looking down: the slider's percentage as the game's 0 to 1, labe
     eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.8")
     set("lookDown", 500)
     eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "1", "clamped")
-    eq(game.options.lookDown.format(80), "80% kept"); eq(game.options.lookDown.format(0), "Fades away")
+    eq(game.options.lookDown.format(80), "80% kept"); eq(game.options.lookDown.format(0), "Default")
+    set("lookDown", 0)
+    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "Default: the game's own value")
     set("enabled", false)
     eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "the game's default back")
 end)
@@ -255,7 +257,7 @@ test("controller, no target: the crosshair stays where the game aims, whatever t
     game.zoom = 20; set("side", -50)
     near(GamepadReticle.point[3], 0, "the side offset doesn't move it")
     set("aim", 5)
-    near(GamepadReticle.point[4], 320, "the height setting is for targets: no target, the game's own height")
+    near(GamepadReticle.point[4], 320, "the vertical offset is for targets: no target, the game's own height")
     eq(onUpdateFramesShown(), 0, "no frame runs every frame")
 end)
 
@@ -268,7 +270,7 @@ test("controller, a target: the crosshair goes under its nameplate, re-placed on
     eq(GamepadReticle.point.relativeTo, softPlate, "no target of yours: the controller's soft target")
     eq(GamepadReticle.point[2], "BOTTOM"); eq(GamepadReticle.point[4], -12, "just below the nameplate")
     set("aim", -5)
-    near(GamepadReticle.point[4], -12 - 0.05 * 768, "the height setting: 5% of the screen down from there")
+    near(GamepadReticle.point[4], -12 - 0.05 * 768, "the vertical offset: 5% of the screen down from there")
     eq(GamepadReticle.point.relativeTo, softPlate, "still on the nameplate")
     set("aim", 0)
     game.units.target = true; game.nameplates.target = targetPlate
