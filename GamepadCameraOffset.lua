@@ -404,23 +404,36 @@ function Camera.SetCrosshairColor(text)
     return true
 end
 
--- One channel of the crosshair's color, 0 to 255: red 1, green 2, blue 3, opacity 4.
--- The color settings' sliders read and write it, all in the one RRGGBBAA value.
--- (Not the game's color picker: opened from addon code, its controller bindings
--- went on the game's binding stack tainted, so the right stick did nothing and the
--- game then refused its own SetPreferredGamepadInteractTarget, blaming this addon.
--- Seen in game, 2026-11-19.)
-function Camera.ColorChannel(channel)
-    local channels = { Camera.ParseColor(getSettings().crosshairColor) }
-    if not channels[1] then return 255 end
-    return math.floor(channels[channel] * 255 + 0.5)
+-- The crosshair's color for the settings page's own color swatch, which opens the
+-- game's color picker from the game's code (Settings.CreateColorSwatch,
+-- SettingsColorSwatchMixin). It speaks "AARRGGBB", alpha always FF: it sets the
+-- color only, and the opacity slider the alpha. (Opening the picker from this
+-- addon's own code put its controller bindings on the game's binding stack
+-- tainted: the right stick did nothing and the game refused its own
+-- SetPreferredGamepadInteractTarget, blaming this addon. Seen in game, 2026-11-19.)
+function Camera.SwatchColor()
+    local _, _, _, _, hex = Camera.ParseColor(getSettings().crosshairColor)
+    return "FF" .. (hex or "FFFFFFFF"):sub(1, 6)
 end
 
-function Camera.SetColorChannel(channel, value)
-    local channels = { Camera.ParseColor(getSettings().crosshairColor) }
-    if not channels[1] then channels = { 1, 1, 1, 1 } end
-    channels[channel] = math.max(0, math.min(255, tonumber(value) or 255)) / 255
-    Camera.SetCrosshairColor(Camera.FormatColor(channels[1], channels[2], channels[3], channels[4]))
+function Camera.SetSwatchColor(value)
+    local text = tostring(value or ""):gsub("^#", "")
+    if #text ~= 8 or not text:match("^%x+$") then return end
+    local _, _, _, _, hex = Camera.ParseColor(getSettings().crosshairColor)
+    Camera.SetCrosshairColor(text:sub(3, 8) .. (hex or "FFFFFFFF"):sub(7, 8))
+end
+
+-- The crosshair's opacity, 0 to 100%.
+function Camera.CrosshairOpacity()
+    local _, _, _, alpha = Camera.ParseColor(getSettings().crosshairColor)
+    return math.floor((alpha or 1) * 100 + 0.5)
+end
+
+function Camera.SetCrosshairOpacity(percent)
+    local red, green, blue = Camera.ParseColor(getSettings().crosshairColor)
+    if not red then red, green, blue = 1, 1, 1 end
+    local alpha = math.max(0, math.min(100, tonumber(percent) or 100)) / 100
+    Camera.SetCrosshairColor(Camera.FormatColor(red, green, blue, alpha))
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -514,20 +527,19 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
-    -- The crosshair's color: four sliders, 0 to 255, on the one RRGGBBAA value.
-    if type(Settings.RegisterProxySetting) == "function" then
-        local channelNames = { "Crosshair red", "Crosshair green", "Crosshair blue", "Crosshair opacity" }
-        for channel, label in ipairs(channelNames) do
-            local setting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairColor" .. channel,
-                Settings.VarType.Number, label, 255,
-                function() return Camera.ColorChannel(channel) end,
-                function(value) Camera.SetColorChannel(channel, value) end)
-            local tooltip = "The controller's aiming dot's " .. (channel == 4 and "opacity" or "color")
-                .. ", 0 to 255. Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF."
-            Settings.CreateSlider(category, setting, sliderOptions(0, 255, 5, function(value)
-                return tostring(math.floor((tonumber(value) or 0) + 0.5))
-            end), tooltip)
-        end
+    -- The crosshair's color: the settings page's own swatch (it opens the game's
+    -- color picker itself), then its opacity, both on the one RRGGBBAA value.
+    if type(Settings.RegisterProxySetting) == "function" and type(Settings.CreateColorSwatch) == "function" then
+        local colorSetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairSwatch",
+            Settings.VarType.String, "Crosshair color", "FFFFFFFF", Camera.SwatchColor, Camera.SetSwatchColor)
+        Settings.CreateColorSwatch(category, colorSetting,
+            "The controller's aiming dot's color, e.g. to see it better on the ground. "
+            .. "Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.")
+        local opacitySetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairOpacity",
+            Settings.VarType.Number, "Crosshair opacity", 100, Camera.CrosshairOpacity, Camera.SetCrosshairOpacity)
+        Settings.CreateSlider(category, opacitySetting, sliderOptions(0, 100, 5, function(value)
+            return string.format("%d%%", math.floor((tonumber(value) or 0) + 0.5))
+        end), "How solid the controller's aiming dot is: 100% is solid, lower lets the world show through.")
     end
 
     Settings.RegisterAddOnCategory(category)
