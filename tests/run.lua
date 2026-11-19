@@ -284,6 +284,14 @@ test("controller, a target: the crosshair goes under its nameplate, re-placed on
     game.nameplates.target = nil; game.nameplates.softenemy = nil
     game.fire("NAME_PLATE_UNIT_REMOVED", "nameplate1"); frame()
     eq(GamepadReticle.point.relativeTo, UIParent, "no nameplate left (off screen): back where the game aims")
+    game.nameplates.softenemy = softPlate
+    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate2"); frame()
+    eq(GamepadReticle.point.relativeTo, UIParent,
+        "a target without a nameplate (a friend, friendly plates off): never jumps to the soft target")
+    local friendPlate = { name = "friend's plate" }
+    game.nameplates.target = friendPlate
+    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate4"); frame()
+    eq(GamepadReticle.point.relativeTo, friendPlate, "with friendly plates on: on the friend")
     near(GamepadReticle.point[3], 0)
     eq(onUpdateFramesShown(), 0, "still nothing per frame: the game moves the nameplate, and the dot with it")
 end)

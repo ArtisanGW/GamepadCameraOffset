@@ -68,8 +68,11 @@ local Camera = {
 
     -- The crosshair on a target: this far below its nameplate, in UI units.
     CROSSHAIR_BELOW_NAMEPLATE = 12,
-    -- Whose nameplate the crosshair goes on, first that has one: your target, then
-    -- the controller's soft target (what it would attack).
+    -- Whose nameplate the crosshair goes on: your target, friendly or not, or with
+    -- no target the controller's soft target (what it would attack). With a target
+    -- selected it never jumps to another unit: no nameplate for it (friendly ones
+    -- are off unless the game's friendly nameplates are on), and it stays where
+    -- the game aims.
     CROSSHAIR_TARGET_UNITS = { "target", "softenemy" },
 }
 _G.GamepadCameraOffset = Camera
@@ -268,14 +271,17 @@ function Camera.PixelsToFrameUnits(frame, pixels)
     return pixels * Camera.SCREEN_HEIGHT_IN_UNITS / physicalHeight / scale
 end
 
--- The nameplate of the first of CROSSHAIR_TARGET_UNITS that has one, and that unit.
+-- The crosshair's unit: the first of CROSSHAIR_TARGET_UNITS that exists. Then its
+-- nameplate, if it has one, and the unit.
 function Camera.CrosshairTargetNameplate()
     local namePlates = _G.C_NamePlate
     if type(namePlates) ~= "table" or type(namePlates.GetNamePlateForUnit) ~= "function" then return nil end
+    if type(UnitExists) ~= "function" then return nil end
     for _, unit in ipairs(Camera.CROSSHAIR_TARGET_UNITS) do
-        if type(UnitExists) == "function" and UnitExists(unit) then
+        if UnitExists(unit) then
             local succeeded, nameplate = pcall(namePlates.GetNamePlateForUnit, unit)
             if succeeded and nameplate then return nameplate, unit end
+            return nil, unit
         end
     end
     return nil
