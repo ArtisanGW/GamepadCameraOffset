@@ -63,15 +63,11 @@ local Camera = {
     TILT_PAD_AT_LIGHTEST = 0.75,
     TILT_PAD_AT_STRONGEST = 0.125,
 
-    -- Where the character sits on screen. The camera aims at the character, then
-    -- slides sideways by the shoulder offset, so the character sits that many
-    -- yards left of the middle, seen from the zoom distance. At cameraFov 90 the
-    -- view is 90 degrees across a 4:3 screen, so tan(half its height) is 3/4 of
-    -- tan(half the field of view).
-    DEFAULT_FIELD_OF_VIEW = 90,        -- cameraFov when the CVar can't be read
-    SCREEN_HEIGHT_TO_WIDTH = 0.75,     -- 4:3: the height's share of the width
-    MINIMUM_ZOOM_YARDS = 1.5,          -- closer counts as this (first person)
-    CROSSHAIR_MOVE_THRESHOLD = 0.5,    -- UI units the crosshair must move before it's placed again
+    -- The crosshair on a target: this far below its nameplate, in UI units.
+    CROSSHAIR_BELOW_NAMEPLATE = 12,
+    -- Whose nameplate the crosshair goes on, first that has one: your target, then
+    -- the controller's soft target (what it would attack).
+    CROSSHAIR_TARGET_UNITS = { "target", "softenemy" },
 }
 _G.GamepadCameraOffset = Camera
 
@@ -214,11 +210,19 @@ function Camera.Remove()
 end
 
 -- The crosshair: the controller UI's GamepadReticle, a small dot Blizzard puts
--- at the screen's middle (x) and the engine's aim height (GetCursorCenterPosition).
--- It's a plain frame, not a protected one, so it moves in combat too. Blizzard
--- puts it back on a resize (GamepadReticleMixin:Recenter), which is hooked.
--- Moving it only moves the dot: what the controller's soft targeting picks is
--- decided by the game, not by the dot.
+-- at the screen's middle (x) and the engine's aim height (GetCursorCenterPosition):
+-- where the controller's automatic targeting aims. It also holds the auto-attack
+-- swing timer, so it stays. Blizzard places it once and again only on a resize
+-- (GamepadReticleMixin:Recenter in Blizzard_Gamepad/UI/Reticle/GamepadReticle.lua).
+--
+-- With a target (yours, or else the controller's soft target), the dot goes just
+-- below the target's nameplate: anchored to it, so the game moves it with the
+-- target and nothing here runs per frame. It's placed again only when the target
+-- changes or its nameplate comes or goes. With no target, or no nameplate (they're
+-- off, or the target is off screen), it stays where the game aims, moved up or
+-- down by the crosshair height setting. (Following the character instead, as
+-- before, put the dot far from what you were attacking: seen in game.)
+-- It's a plain frame, not a protected one, so it moves in combat too.
 
 -- Secret values (hidden from addons in some situations) can't be used in math.
 local function readableOrNil(value)
@@ -226,27 +230,7 @@ local function readableOrNil(value)
     return value
 end
 
-local function getCVarNumber(name)
-    return tonumber(readableOrNil(getCVar(name)))
-end
-
--- The character's offset from the screen's middle, in UIParent units (x only:
--- the tilt setting turns the camera around the character, which stays on
--- the middle line).
-function Camera.CharacterX()
-    local shoulderYards = getCVarNumber(Camera.CVAR_OVER_SHOULDER) or 0
-    if shoulderYards == 0 then return 0 end
-    local zoom = type(GetCameraZoom) == "function" and tonumber(readableOrNil(GetCameraZoom())) or nil
-    if not zoom then return nil end
-    local fieldOfView = getCVarNumber("cameraFov") or Camera.DEFAULT_FIELD_OF_VIEW
-    if fieldOfView <= 0 then fieldOfView = Camera.DEFAULT_FIELD_OF_VIEW end
-    local tangentOfHalfHeight = Camera.SCREEN_HEIGHT_TO_WIDTH * math.tan(math.rad(fieldOfView) / 2)
-    local distance = math.max(zoom, Camera.MINIMUM_ZOOM_YARDS)
-    local unitsPerYard = UIParent:GetHeight() / (2 * distance * tangentOfHalfHeight)
-    return -shoulderYards * unitsPerYard
-end
-
-local lastCrosshairPosition   -- { x, y } where it was last put, or nil when Blizzard placed it
+local crosshairPlacedOn   -- "nameplate", "screen", or nil while Blizzard placed it
 
 local function shouldMoveCrosshair()
     local settings = getSettings()
@@ -262,36 +246,60 @@ local function getAimHeight(crosshairFrame)
     return aimY and aimY / scale or nil
 end
 
-function Camera.PlaceCrosshair(forced)
+-- The nameplate of the first of CROSSHAIR_TARGET_UNITS that has one, and that unit.
+function Camera.CrosshairTargetNameplate()
+    local namePlates = _G.C_NamePlate
+    if type(namePlates) ~= "table" or type(namePlates.GetNamePlateForUnit) ~= "function" then return nil end
+    for _, unit in ipairs(Camera.CROSSHAIR_TARGET_UNITS) do
+        if type(UnitExists) == "function" and UnitExists(unit) then
+            local succeeded, nameplate = pcall(namePlates.GetNamePlateForUnit, unit)
+            if succeeded and nameplate then return nameplate, unit end
+        end
+    end
+    return nil
+end
+
+function Camera.PlaceCrosshair()
     local crosshairFrame = _G.GamepadReticle
     if not shouldMoveCrosshair() then
-        if lastCrosshairPosition and type(crosshairFrame) == "table" then
-            lastCrosshairPosition = nil
+        if crosshairPlacedOn and type(crosshairFrame) == "table" then
+            crosshairPlacedOn = nil
             if type(crosshairFrame.Recenter) == "function" then crosshairFrame:Recenter() end
         end
         return
     end
-    local x, y = Camera.CharacterX(), getAimHeight(crosshairFrame)
-    if not x or not y then return end
+    local nameplate = Camera.CrosshairTargetNameplate()
+    if nameplate then
+        crosshairFrame:ClearAllPoints()
+        crosshairFrame:SetPoint("CENTER", nameplate, "BOTTOM", 0, -Camera.CROSSHAIR_BELOW_NAMEPLATE)
+        crosshairPlacedOn = "nameplate"
+        return
+    end
+    local aimHeight = getAimHeight(crosshairFrame)
+    if not aimHeight then return end
     local aimPercent = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
-    y = y + aimPercent / 100 * UIParent:GetHeight()
-    local last = lastCrosshairPosition
-    local barelyMoved = last and math.abs(last.x - x) < Camera.CROSSHAIR_MOVE_THRESHOLD
-        and math.abs(last.y - y) < Camera.CROSSHAIR_MOVE_THRESHOLD
-    if barelyMoved and not forced then return end
-    lastCrosshairPosition = { x = x, y = y }
     crosshairFrame:ClearAllPoints()
-    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", x, y)
+    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", 0, aimHeight + aimPercent / 100 * UIParent:GetHeight())
+    crosshairPlacedOn = "screen"
+end
+Camera.CrosshairPlacedOn = function() return crosshairPlacedOn end
+
+-- Placed again on the next frame, once, however many reasons came in this frame
+-- (a nameplate going away is still on its unit while its event runs).
+local crosshairPlaceQueued = false
+local function placeCrosshairNextFrame()
+    if crosshairPlaceQueued then return end
+    crosshairPlaceQueued = true
+    C_Timer.After(0, function()
+        crosshairPlaceQueued = false
+        Camera.PlaceCrosshair()
+    end)
 end
 
--- Follows the zoom every frame while the crosshair is on (placing it only when
--- it moved), and takes it back after Blizzard's own Recenter.
-local crosshairFollower = CreateFrame("Frame")
-crosshairFollower:Hide()   -- shown by WatchCrosshair, once the saved settings are in
-crosshairFollower:SetScript("OnUpdate", function(self)
-    Camera.PlaceCrosshair()
-    if not shouldMoveCrosshair() then self:Hide() end
-end)
+local CROSSHAIR_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_SOFT_ENEMY_CHANGED", "NAME_PLATE_UNIT_ADDED",
+    "NAME_PLATE_UNIT_REMOVED" }
+local crosshairEventFrame = CreateFrame("Frame")
+crosshairEventFrame:SetScript("OnEvent", function() placeCrosshairNextFrame() end)
 
 local recenterHooked = false
 function Camera.WatchCrosshair()
@@ -300,12 +308,16 @@ function Camera.WatchCrosshair()
         and type(hooksecurefunc) == "function"
     if not recenterHooked and canHook then
         recenterHooked = true
+        -- Blizzard's own Recenter (a resize) puts it back in the middle: ours after it.
         hooksecurefunc(crosshairFrame, "Recenter", function()
-            if shouldMoveCrosshair() then Camera.PlaceCrosshair(true) else lastCrosshairPosition = nil end
+            if shouldMoveCrosshair() then Camera.PlaceCrosshair() else crosshairPlacedOn = nil end
         end)
     end
-    if shouldMoveCrosshair() then crosshairFollower:Show() else crosshairFollower:Hide() end
-    Camera.PlaceCrosshair(true)
+    for _, event in ipairs(CROSSHAIR_EVENTS) do
+        if shouldMoveCrosshair() then pcall(crosshairEventFrame.RegisterEvent, crosshairEventFrame, event)
+        else crosshairEventFrame:UnregisterEvent(event) end
+    end
+    Camera.PlaceCrosshair()
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -386,13 +398,14 @@ function Camera.RegisterSettings()
         .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Fades away", "kept") end))
-    addSetting("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
-        "With the controller UI on, moves its aiming dot sideways so it stays in line with "
-        .. "your character as the side offset and your zoom change. Only the dot moves: "
-        .. "what the controller targets is still decided by the game.")
+    addSetting("crosshair", Settings.VarType.Boolean, "Crosshair on your target",
+        "With the controller UI on, puts its aiming dot (and its auto-attack timer) just "
+        .. "below your target's nameplate, or the controller's soft target's, so it stays on "
+        .. "what you attack as you both move. With no target, or nameplates off, it stays "
+        .. "where the game aims. What the controller targets is still decided by the game.")
     addSetting("aim", Settings.VarType.Number, "Crosshair height",
-        "Moves the controller's aiming dot up or down from where the game puts it, "
-        .. "in percent of the screen's height. Normal is the game's own place.",
+        "With no target, moves the controller's aiming dot up or down from where the game "
+        .. "puts it, in percent of the screen's height. Normal is the game's own place.",
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Normal", "up", "down") end))
 

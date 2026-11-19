@@ -99,10 +99,14 @@ local function boot(gamepad, saved)
     _G.GamepadReticle = {
         GetEffectiveScale = function() return 1.5 end,
         ClearAllPoints = function(self) self.point = nil end,
-        SetPoint = function(self, p, rel, rp, x, y) self.point = { p, rp, x, y } end,
-        GetPoint = function(self) local q = self.point; if q then return q[1], UIParent, q[2], q[3], q[4] end end,
+        SetPoint = function(self, p, rel, rp, x, y) self.point = { p, rp, x, y, relativeTo = rel } end,
+        GetPoint = function(self) local q = self.point; if q then return q[1], q.relativeTo or UIParent, q[2], q[3], q[4] end end,
         Recenter = function(self) game.recenters = game.recenters + 1; self.point = { "CENTER", "BOTTOM", 0, 320 } end,
     }
+    -- Units and their nameplates: game.units[unit] = true, game.nameplates[unit] = a frame.
+    game.units, game.nameplates = {}, {}
+    _G.UnitExists = function(unit) return game.units[unit] == true end
+    _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
     _G.GetBuildInfo = function() return "1.60.1", "70959", "", 16001 end
@@ -235,50 +239,75 @@ end)
 local function tick() for _, f in ipairs(game.frames) do if f.update and f.shown then f.update(f) end end end
 local function near(a, b, msg) if math.abs(a - b) > 0.01 then error((msg or "") .. ": expected " .. b .. ", got " .. a, 2) end end
 
-test("controller: the crosshair moves left in line with the character, by the zoom", function()
+local function onUpdateFramesShown()
+    local count = 0
+    for _, f in ipairs(game.frames) do if f.update and f.shown then count = count + 1 end end
+    return count
+end
+
+test("controller, no target: the crosshair stays where the game aims, whatever the side and zoom, with nothing per frame", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local p = GamepadReticle.point
-    -- 1.2 yd at 10 yd zoom, fov 90: 768 / (2 * 10 * 0.75) = 51.2 per yard
-    near(p[3], -1.2 * 51.2, "x"); near(p[4], 320, "the game's aim height (480 / scale 1.5)")
-    game.zoom = 20; tick()
-    near(GamepadReticle.point[3], -1.2 * 25.6, "zooming out brings it back toward the middle")
-    set("side", -50); tick()
-    near(GamepadReticle.point[3], 1.5 * 25.6, "left shoulder: the character, and the dot, sit right")
+    near(p[3], 0, "x: the middle, where the controller's targeting aims")
+    near(p[4], 320, "the game's aim height (480 / scale 1.5)")
+    eq(GamepadReticle.point.relativeTo, UIParent)
+    game.zoom = 20; set("side", -50)
+    near(GamepadReticle.point[3], 0, "the side offset doesn't move it")
     set("aim", 5)
     near(GamepadReticle.point[4], 320 + 0.05 * 768, "5% of the screen up")
+    eq(onUpdateFramesShown(), 0, "no frame runs every frame")
+end)
+
+test("controller, a target: the crosshair goes under its nameplate, re-placed only when the target or plates change", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local targetPlate, softPlate = { name = "target's plate" }, { name = "soft target's plate" }
+    game.units.softenemy = true; game.nameplates.softenemy = softPlate
+    game.fire("PLAYER_SOFT_ENEMY_CHANGED"); frame()
+    eq(GamepadReticle.point.relativeTo, softPlate, "no target of yours: the controller's soft target")
+    eq(GamepadReticle.point[2], "BOTTOM"); eq(GamepadReticle.point[4], -12, "just below the nameplate")
+    game.units.target = true; game.nameplates.target = targetPlate
+    game.fire("PLAYER_TARGET_CHANGED"); frame()
+    eq(GamepadReticle.point.relativeTo, targetPlate, "your target first")
+    game.fire("PLAYER_TARGET_CHANGED"); game.fire("NAME_PLATE_UNIT_ADDED", "nameplate3")
+    eq(#game.timers, 1, "several reasons in one frame: placed once, on the next frame")
+    frame()
+    game.nameplates.target = nil; game.nameplates.softenemy = nil
+    game.fire("NAME_PLATE_UNIT_REMOVED", "nameplate1"); frame()
+    eq(GamepadReticle.point.relativeTo, UIParent, "no nameplate left (off screen): back where the game aims")
+    near(GamepadReticle.point[3], 0)
+    eq(onUpdateFramesShown(), 0, "still nothing per frame: the game moves the nameplate, and the dot with it")
 end)
 
 test("the game's own Recenter (a resize) is followed by ours", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local targetPlate = {}
+    game.units.target = true; game.nameplates.target = targetPlate
     GamepadReticle:Recenter()
-    near(GamepadReticle.point[3], -1.2 * 51.2, "put back in line")
+    eq(GamepadReticle.point.relativeTo, targetPlate, "put back on the target")
 end)
 
 test("crosshair off, GamepadCameraOffset off or keyboard: the game's crosshair is left alone", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.units.target = true; game.nameplates.target = {}
     set("crosshair", false)
     eq(GamepadReticle.point[3], 0, "recentered by the game's own code")
-    tick()
-    eq(GamepadReticle.point[3], 0, "and not moved again")
+    eq(GamepadReticle.point[4], 320)
+    game.fire("PLAYER_TARGET_CHANGED"); frame()
+    eq(GamepadReticle.point.relativeTo, nil, "and not put on the target")
     set("crosshair", true)
     set("enabled", false)
-    eq(GamepadReticle.point[3], 0)
+    eq(GamepadReticle.point.relativeTo, nil, "off: the game's own place")
 
     boot(false, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame(); tick()
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.units.target = true; game.nameplates.target = {}
+    game.fire("PLAYER_TARGET_CHANGED"); frame()
     eq(GamepadReticle.point, nil, "keyboard: never touched")
     eq(game.recenters, 0)
-end)
-
-test("a secret zoom leaves the crosshair where it was", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local x = GamepadReticle.point[3]
-    game.zoom = { secret = true }; tick()
-    eq(GamepadReticle.point[3], x)
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.

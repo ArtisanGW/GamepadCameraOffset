@@ -82,15 +82,19 @@ local function getCrosshairPosition()
     if succeeded then return x, y end
 end
 
+-- With a target, the crosshair is on its nameplate; with none, in the middle at
+-- the game's aim height plus the height setting, whatever the side offset.
 local function checkCrosshair(label, aimPercent)
     local name = "crosshair at " .. label
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
-    local expectedX, aimHeight = Camera.CharacterX(), Camera.GetAimHeight(GamepadReticle)
-    if not expectedX or not aimHeight then
-        return skipCheck(name, "zoom or the game's aim height can't be read")
+    if Camera.CrosshairTargetNameplate() then
+        local _, anchoredTo = GamepadReticle:GetPoint(1)
+        return expectEqual(name .. ": on the target's nameplate", true, anchoredTo == Camera.CrosshairTargetNameplate())
     end
+    local aimHeight = Camera.GetAimHeight(GamepadReticle)
+    if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end
     local x, y = getCrosshairPosition()
-    expectNear(name .. ": x, in line with the character", expectedX, x, 1)
+    expectNear(name .. ": x, in the middle, where the game aims", 0, x, 1)
     expectNear(name .. ": y", aimHeight + aimPercent / 100 * UIParent:GetHeight(), y, 1)
 end
 
