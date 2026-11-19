@@ -404,80 +404,28 @@ function Camera.SetCrosshairColor(text)
     return true
 end
 
--- The crosshair's color for the settings page's own color swatch, which opens the
--- game's color picker from the game's code (Settings.CreateColorSwatch,
--- SettingsColorSwatchMixin). It speaks "AARRGGBB", alpha always FF: it sets the
--- color only, and the opacity slider the alpha. (Opening the picker from this
--- addon's own code put its controller bindings on the game's binding stack
--- tainted: the right stick did nothing and the game refused its own
--- SetPreferredGamepadInteractTarget, blaming this addon. Seen in game, 2026-11-19.)
-local pickerAskedAt   -- when the swatch last read the color: it's about to open the picker
-function Camera.SwatchColor()
-    pickerAskedAt = type(GetTime) == "function" and GetTime() or nil
-    local _, _, _, _, hex = Camera.ParseColor(getSettings().crosshairColor)
-    return "FF" .. (hex or "FFFFFFFF"):sub(1, 6)
-end
-
--- The picker's sticks, done here. Opened for an addon's setting, the picker's
--- own stick bindings never work (the game refuses them: seen in game, while the
--- same picker opened from the chat settings works). So while the picker is open
--- for the crosshair color, as the game's own bindings would:
---   the left stick moves the point on the color wheel (direction = hue, distance
---   from the middle = saturation; ColorPickerSoftCursor_OnUpdate's mapping);
---   the right stick's up and down change the brightness;
---   the D-pad's up and down change the opacity, on the picker's own opacity bar,
---   which the swatch doesn't ask for, so it's put on the picker here when it opens.
--- Nothing runs while the picker is shut.
+-- Brightness on the right stick, done here. Opened from this addon, the picker's
+-- own right-stick binding never works (the game refuses it: seen in game, while
+-- the same picker opened from the chat settings works). So while the picker is
+-- open for the crosshair color on a controller, the camera stick's up and down
+-- change its brightness through the picker's own color control, as the game's
+-- binding would (AdjustBrightness). Nothing runs while the picker is shut.
 Camera.BRIGHTNESS_PER_SECOND = 0.6   -- full stick: dark to bright in under two seconds
-Camera.WHEEL_PER_SECOND = 0.8        -- full stick: the middle to the wheel's edge in about a second
-Camera.OPACITY_PER_SECOND = 0.5      -- D-pad held: see-through to solid in two seconds (the game's: 0.01 per 0.02 s)
 Camera.STICK_DEAD_ZONE = 0.2
-Camera.PICKER_OPENED_WITHIN = 0.5    -- seconds between the swatch reading the color and the picker showing
 
--- A stick's x and y, -1 to 1: "Movement" (left) or "Camera" (right). 0, 0 without one.
-function Camera.StickPosition(configNameWanted)
+-- The controller's right ("Camera") stick's up and down, -1 to 1; 0 without one.
+function Camera.CameraStickY()
     local gamePad = _G.C_GamePad
-    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function" then return 0, 0 end
+    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function" then return 0 end
     local succeeded, state = pcall(gamePad.GetDeviceMappedState)
-    if not (succeeded and type(state) == "table" and type(state.sticks) == "table") then return 0, 0 end
+    if not (succeeded and type(state) == "table" and type(state.sticks) == "table") then return 0 end
     for stickIndex = 1, state.stickCount or #state.sticks do
         local configName = type(gamePad.StickIndexToConfigName) == "function"
             and gamePad.StickIndexToConfigName(stickIndex - 1) or nil   -- the game's function is 0 based
         local stick = state.sticks[stickIndex]
-        if configName == configNameWanted and type(stick) == "table" then
-            return tonumber(stick.x) or 0, tonumber(stick.y) or 0
-        end
+        if configName == "Camera" and type(stick) == "table" then return tonumber(stick.y) or 0 end
     end
-    return 0, 0
-end
-
--- Whether a controller button is held, by its binding name ("PADDUP", "PADDDOWN").
-function Camera.PadButtonDown(configNameWanted)
-    local gamePad = _G.C_GamePad
-    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function"
-        or type(gamePad.ButtonIndexToConfigName) ~= "function" then return false end
-    local succeeded, state = pcall(gamePad.GetDeviceMappedState)
-    if not (succeeded and type(state) == "table" and type(state.buttons) == "table") then return false end
-    for buttonIndex = 1, state.buttonCount or #state.buttons do
-        if state.buttons[buttonIndex] and gamePad.ButtonIndexToConfigName(buttonIndex - 1) == configNameWanted then
-            return true
-        end
-    end
-    return false
-end
-
--- The wheel's point for a hue (degrees) and saturation (0 to 1), and back:
--- hue = the point's angle + 180, saturation = its distance from the middle.
-function Camera.WheelPoint(hue, saturation)
-    local angle = math.rad(hue - 180)
-    return saturation * math.cos(angle), saturation * math.sin(angle)
-end
-
-function Camera.WheelColor(x, y)
-    local distance = math.sqrt(x * x + y * y)
-    if distance > 1 then x, y, distance = x / distance, y / distance, 1 end
-    local hue = math.deg(math.atan2(y, x)) + 180
-    return hue % 360, distance
+    return 0
 end
 
 local brightnessDriver = CreateFrame("Frame")
@@ -486,85 +434,42 @@ brightnessDriver:SetScript("OnUpdate", function(self, elapsed)
     local picker = _G.ColorPickerFrame
     local colorSelect = type(picker) == "table" and picker.Content and picker.Content.ColorPicker
     if not (colorSelect and picker:IsShown()) then return self:Hide() end
+    local stickY = Camera.CameraStickY()
+    if math.abs(stickY) < Camera.STICK_DEAD_ZONE then return end
     local hue, saturation, value = colorSelect:GetColorHSV()
-    local newHue, newSaturation, newValue = hue, saturation, value
-    local leftX, leftY = Camera.StickPosition("Movement")
-    if math.sqrt(leftX * leftX + leftY * leftY) >= Camera.STICK_DEAD_ZONE then
-        local x, y = Camera.WheelPoint(hue, saturation)
-        newHue, newSaturation = Camera.WheelColor(x + leftX * Camera.WHEEL_PER_SECOND * elapsed,
-            y + leftY * Camera.WHEEL_PER_SECOND * elapsed)
-    end
-    local _, rightY = Camera.StickPosition("Camera")
-    if math.abs(rightY) >= Camera.STICK_DEAD_ZONE then
-        newValue = math.max(0, math.min(1, value + rightY * Camera.BRIGHTNESS_PER_SECOND * elapsed))
-    end
-    if newHue ~= hue or newSaturation ~= saturation or newValue ~= value then
-        colorSelect:SetColorHSV(newHue, newSaturation, newValue)
-    end
-    local opacityDirection = (Camera.PadButtonDown("PADDUP") and 1 or 0) - (Camera.PadButtonDown("PADDDOWN") and 1 or 0)
-    if opacityDirection ~= 0 and type(colorSelect.GetColorAlpha) == "function" then
-        local alpha = colorSelect:GetColorAlpha() or 1
-        local newAlpha = math.max(0, math.min(1, alpha + opacityDirection * Camera.OPACITY_PER_SECOND * elapsed))
-        if newAlpha ~= alpha then
-            colorSelect:SetColorAlpha(newAlpha)
-            Camera.SetCrosshairOpacity(newAlpha * 100)
-        end
-    end
+    local brighter = math.max(0, math.min(1, value + stickY * Camera.BRIGHTNESS_PER_SECOND * elapsed))
+    if brighter ~= value then colorSelect:SetColorHSV(hue, saturation, brighter) end
 end)
 Camera.brightnessDriver = brightnessDriver   -- for the tests
 
--- The picker's opacity bar, as the game's OnShow shows it when asked (hasOpacity),
--- on the crosshair's opacity. The next picker anyone opens sets these again.
-function Camera.AddOpacityBar(picker)
-    local content = picker.Content
-    local colorSelect = content and content.ColorPicker
-    if not colorSelect or type(colorSelect.SetColorAlpha) ~= "function" then return end
-    local _, _, _, alpha = Camera.ParseColor(getSettings().crosshairColor)
-    alpha = alpha or 1
-    picker.hasOpacity, picker.opacity = true, alpha
-    picker.opacityFunc = function()
-        if type(colorSelect.GetColorAlpha) == "function" then Camera.SetCrosshairOpacity(colorSelect:GetColorAlpha() * 100) end
-    end
-    for _, part in ipairs({ colorSelect.Alpha, colorSelect.AlphaThumb, content.AlphaBackground }) do
-        if type(part) == "table" and part.Show then part:Show() end
-    end
-    colorSelect:SetColorAlpha(alpha)
-    if colorSelect.SetWidth then colorSelect:SetWidth(255) end   -- the game's widths with the bar
-    if picker.SetWidth then picker:SetWidth(388) end
-end
-
+-- Stops the right stick's brightness when the picker closes.
 local pickerWatched = false
-function Camera.WatchColorPicker()
-    local picker = _G.ColorPickerFrame
-    if pickerWatched or type(picker) ~= "table" or type(picker.HookScript) ~= "function" then return end
+local function watchPicker(picker)
+    if pickerWatched or type(picker.HookScript) ~= "function" then return end
     pickerWatched = true
-    picker:HookScript("OnShow", function()
-        local now = type(GetTime) == "function" and GetTime() or nil
-        local ours = pickerAskedAt and now and now - pickerAskedAt <= Camera.PICKER_OPENED_WITHIN
-        if ours then Camera.AddOpacityBar(picker) end
-        if ours and isControllerUIOn() then brightnessDriver:Show() else brightnessDriver:Hide() end
-    end)
     picker:HookScript("OnHide", function() brightnessDriver:Hide() end)
 end
 
-function Camera.SetSwatchColor(value)
-    local text = tostring(value or ""):gsub("^#", "")
-    if #text ~= 8 or not text:match("^%x+$") then return end
-    local _, _, _, _, hex = Camera.ParseColor(getSettings().crosshairColor)
-    Camera.SetCrosshairColor(text:sub(3, 8) .. (hex or "FFFFFFFF"):sub(7, 8))
-end
-
--- The crosshair's opacity, 0 to 100%.
-function Camera.CrosshairOpacity()
-    local _, _, _, alpha = Camera.ParseColor(getSettings().crosshairColor)
-    return math.floor((alpha or 1) * 100 + 0.5)
-end
-
-function Camera.SetCrosshairOpacity(percent)
-    local red, green, blue = Camera.ParseColor(getSettings().crosshairColor)
-    if not red then red, green, blue = 1, 1, 1 end
-    local alpha = math.max(0, math.min(100, tonumber(percent) or 100)) / 100
-    Camera.SetCrosshairColor(Camera.FormatColor(red, green, blue, alpha))
+-- The game's color picker, with opacity, on the crosshair's color. Cancel puts
+-- back the color it had.
+function Camera.OpenCrosshairColorPicker()
+    local picker = _G.ColorPickerFrame
+    if type(picker) ~= "table" or type(picker.SetupColorPickerAndShow) ~= "function" then return end
+    local colorBefore = getSettings().crosshairColor
+    local red, green, blue, alpha = Camera.ParseColor(colorBefore)
+    if not red then red, green, blue, alpha = 1, 1, 1, 1 end
+    local function takePickedColor()
+        local pickedRed, pickedGreen, pickedBlue = picker:GetColorRGB()
+        local pickedAlpha = type(picker.GetColorAlpha) == "function" and picker:GetColorAlpha() or 1
+        Camera.SetCrosshairColor(Camera.FormatColor(pickedRed, pickedGreen, pickedBlue, pickedAlpha))
+    end
+    picker:SetupColorPickerAndShow({
+        r = red, g = green, b = blue, opacity = alpha, hasOpacity = true,
+        swatchFunc = takePickedColor, opacityFunc = takePickedColor,
+        cancelFunc = function() Camera.SetCrosshairColor(colorBefore) end,
+    })
+    watchPicker(picker)
+    if isControllerUIOn() then brightnessDriver:Show() end
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -658,16 +563,15 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
-    -- The crosshair's color: the settings page's own swatch (it opens the game's
-    -- color picker itself, with the opacity bar added), on the one RRGGBBAA value.
-    if type(Settings.RegisterProxySetting) == "function" and type(Settings.CreateColorSwatch) == "function" then
-        Camera.WatchColorPicker()
-        local colorSetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairSwatch",
-            Settings.VarType.String, "Crosshair color", "FFFFFFFF", Camera.SwatchColor, Camera.SetSwatchColor)
-        Settings.CreateColorSwatch(category, colorSetting,
-            "The controller's aiming dot's color and opacity, e.g. to see it better on the ground. "
-            .. "On a controller: left stick for the color, right stick for the brightness, D-pad up and down for the opacity. "
-            .. "Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.")
+    -- The crosshair's color: a button opening the game's color picker.
+    if type(CreateSettingsButtonInitializer) == "function" and SettingsPanel and SettingsPanel.GetLayout then
+        local layout = SettingsPanel:GetLayout(category)
+        local colorButton = CreateSettingsButtonInitializer("Crosshair color", "Choose",
+            function() Camera.OpenCrosshairColorPicker() end,
+            "The color and opacity of the controller's aiming dot, e.g. to see it better on the "
+            .. "ground. Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.",
+            true)
+        if layout and layout.AddInitializer then layout:AddInitializer(colorButton) end
     end
 
     Settings.RegisterAddOnCategory(category)
