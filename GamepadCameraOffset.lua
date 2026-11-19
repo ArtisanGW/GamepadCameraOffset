@@ -411,9 +411,62 @@ end
 -- addon's own code put its controller bindings on the game's binding stack
 -- tainted: the right stick did nothing and the game refused its own
 -- SetPreferredGamepadInteractTarget, blaming this addon. Seen in game, 2026-11-19.)
+local pickerAskedAt   -- when the swatch last read the color: it's about to open the picker
 function Camera.SwatchColor()
+    pickerAskedAt = type(GetTime) == "function" and GetTime() or nil
     local _, _, _, _, hex = Camera.ParseColor(getSettings().crosshairColor)
     return "FF" .. (hex or "FFFFFFFF"):sub(1, 6)
+end
+
+-- Brightness on the right stick, done here. Opened for an addon's setting, the
+-- picker's own right-stick binding never works (the game refuses it: seen in
+-- game, while the same picker opened from the chat settings works). So while
+-- the picker is open for the crosshair color, the camera stick's up and down
+-- change its brightness, the way the game's own binding would. Nothing runs
+-- while the picker is shut.
+Camera.BRIGHTNESS_PER_SECOND = 0.6   -- full stick: dark to bright in under two seconds
+Camera.STICK_DEAD_ZONE = 0.2
+Camera.PICKER_OPENED_WITHIN = 0.5    -- seconds between the swatch reading the color and the picker showing
+
+function Camera.CameraStickY()
+    local gamePad = _G.C_GamePad
+    if type(gamePad) ~= "table" or type(gamePad.GetDeviceMappedState) ~= "function" then return 0 end
+    local succeeded, state = pcall(gamePad.GetDeviceMappedState)
+    if not (succeeded and type(state) == "table" and type(state.sticks) == "table") then return 0 end
+    for stickIndex = 1, state.stickCount or #state.sticks do
+        local configName = type(gamePad.StickIndexToConfigName) == "function"
+            and gamePad.StickIndexToConfigName(stickIndex - 1) or nil   -- the game's function is 0 based
+        local stick = state.sticks[stickIndex]
+        if configName == "Camera" and type(stick) == "table" then return tonumber(stick.y) or 0 end
+    end
+    return 0
+end
+
+local brightnessDriver = CreateFrame("Frame")
+brightnessDriver:Hide()
+brightnessDriver:SetScript("OnUpdate", function(self, elapsed)
+    local picker = _G.ColorPickerFrame
+    local colorSelect = type(picker) == "table" and picker.Content and picker.Content.ColorPicker
+    if not (colorSelect and picker:IsShown()) then return self:Hide() end
+    local stickY = Camera.CameraStickY()
+    if math.abs(stickY) < Camera.STICK_DEAD_ZONE then return end
+    local hue, saturation, value = colorSelect:GetColorHSV()
+    local brighter = math.max(0, math.min(1, value + stickY * Camera.BRIGHTNESS_PER_SECOND * elapsed))
+    if brighter ~= value then colorSelect:SetColorHSV(hue, saturation, brighter) end
+end)
+Camera.brightnessDriver = brightnessDriver   -- for the tests
+
+local pickerWatched = false
+function Camera.WatchColorPicker()
+    local picker = _G.ColorPickerFrame
+    if pickerWatched or type(picker) ~= "table" or type(picker.HookScript) ~= "function" then return end
+    pickerWatched = true
+    picker:HookScript("OnShow", function()
+        local now = type(GetTime) == "function" and GetTime() or nil
+        local ours = pickerAskedAt and now and now - pickerAskedAt <= Camera.PICKER_OPENED_WITHIN
+        if ours and isControllerUIOn() then brightnessDriver:Show() else brightnessDriver:Hide() end
+    end)
+    picker:HookScript("OnHide", function() brightnessDriver:Hide() end)
 end
 
 function Camera.SetSwatchColor(value)
@@ -530,6 +583,7 @@ function Camera.RegisterSettings()
     -- The crosshair's color: the settings page's own swatch (it opens the game's
     -- color picker itself), then its opacity, both on the one RRGGBBAA value.
     if type(Settings.RegisterProxySetting) == "function" and type(Settings.CreateColorSwatch) == "function" then
+        Camera.WatchColorPicker()
         local colorSetting = Settings.RegisterProxySetting(category, "GamepadCameraOffset_crosshairSwatch",
             Settings.VarType.String, "Crosshair color", "FFFFFFFF", Camera.SwatchColor, Camera.SetSwatchColor)
         Settings.CreateColorSwatch(category, colorSetting,

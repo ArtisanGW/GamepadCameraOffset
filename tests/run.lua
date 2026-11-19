@@ -120,11 +120,24 @@ local function boot(gamepad, saved)
     end
     local function addInitializer(_, initializer) game.buttons[#game.buttons + 1] = initializer end
     _G.SettingsPanel = { GetLayout = function() return { AddInitializer = addInitializer } end }
-    game.picker = {}
+    -- The game's color picker: shown or not, its hooks, and its ColorSelect's HSV.
+    game.time = 100
+    _G.GetTime = function() return game.time end
+    game.picker = { hooks = {}, hsv = { 120, 1, 0.5 } }
     _G.ColorPickerFrame = {
-        SetupColorPickerAndShow = function(self, info) game.picker.info = info; game.picker.shown = true end,
-        GetColorRGB = function() return game.picker.red, game.picker.green, game.picker.blue end,
-        GetColorAlpha = function() return game.picker.alpha end,
+        IsShown = function() return game.picker.shown == true end,
+        HookScript = function(_, script, fn) game.picker.hooks[script] = fn end,
+        Show = function() game.picker.shown = true; if game.picker.hooks.OnShow then game.picker.hooks.OnShow() end end,
+        Hide = function() game.picker.shown = false; if game.picker.hooks.OnHide then game.picker.hooks.OnHide() end end,
+        Content = { ColorPicker = {
+            GetColorHSV = function() return game.picker.hsv[1], game.picker.hsv[2], game.picker.hsv[3] end,
+            SetColorHSV = function(_, h, s, v) game.picker.hsv = { h, s, v } end,
+        } },
+    }
+    game.cameraStickY = 0
+    _G.C_GamePad = {
+        GetDeviceMappedState = function() return { stickCount = 2, sticks = { { y = 0.9 }, { y = game.cameraStickY } } } end,
+        StickIndexToConfigName = function(index) return index == 0 and "Movement" or "Camera" end,
     }
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
@@ -357,6 +370,29 @@ test("the crosshair goes under the part of the nameplate you see: health bar, el
     plate.UnitFrame.healthBar = part(false)
     game.fire("NAME_PLATE_UNIT_ADDED", "nameplate1"); frame()
     eq(GamepadReticle.point.relativeTo, name, "names only (a friendly player): under the name")
+end)
+
+test("controller: while the color picker is open for the crosshair color, the right stick sets its brightness", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local driver = GamepadCameraOffset.brightnessDriver
+    local function step(seconds) driver.update(driver, seconds) end
+    ColorPickerFrame:Show()
+    eq(driver.shown, false, "a picker opened by something else (the chat settings): left to the game")
+    ColorPickerFrame:Hide()
+    game.swatch.getValue()   -- the swatch reads the color as it opens the picker
+    game.time = game.time + 0.1
+    ColorPickerFrame:Show()
+    eq(driver.shown, true, "opened for the crosshair color: the right stick drives the brightness")
+    game.cameraStickY = 1; step(0.5)
+    near(game.picker.hsv[3], 0.8, "stick up: brighter (0.6 a second)")
+    eq(game.picker.hsv[1], 120, "the hue kept")
+    game.cameraStickY = -1; step(5)
+    near(game.picker.hsv[3], 0, "stick down: darker, not past black")
+    game.cameraStickY = 0.1; step(1)
+    near(game.picker.hsv[3], 0, "inside the dead zone: nothing")
+    ColorPickerFrame:Hide()
+    eq(driver.shown, false, "picker shut: nothing runs")
 end)
 
 local function dotColor()
