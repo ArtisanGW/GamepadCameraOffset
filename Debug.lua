@@ -13,7 +13,7 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
-local SETTING_KEYS = { "enabled", "side", "height", "crosshair", "aim" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "crosshair", "aim" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 
@@ -100,7 +100,7 @@ local STEPS = {}
 local function addStep(stepFunction) STEPS[#STEPS + 1] = stepFunction end
 
 addStep(function()
-    changeSettings({ enabled = true, side = 45, height = 35, crosshair = true, aim = 0 })
+    changeSettings({ enabled = true, side = 45, tilt = 50, crosshair = true, aim = 0 })
     expectEqual("settings page registered", true, Camera.category ~= nil)
     expectEqual("enabled: camera un-centered (CameraKeepCharacterCentered)", "0",
         Camera.GetCVar(Camera.CVAR_KEEP_CENTERED))
@@ -117,16 +117,21 @@ for _, sidePercent in ipairs({ -100, -50, 0, 50, 100 }) do
     end)
 end
 
-for _, heightPercent in ipairs({ 0, 50, 100 }) do
+-- Tilt: off, then the pad expected for each percentage (0.75 at 1% down to
+-- 0.125 at 100%, the game's pad working backwards).
+local EXPECTED_TILT_PADS = { [1] = 0.75 - 0.625 / 100, [50] = 0.4375, [100] = 0.125 }
+for _, tiltPercent in ipairs({ 0, 1, 50, 100 }) do
     addStep(function()
-        changeSettings({ height = heightPercent })
-        local label = "height " .. Camera.Label(heightPercent, "Normal", "higher")
-        local expectedPad = heightPercent / 100 * Camera.HEIGHT_PAD_AT_FULL
-        expectEqual(label .. ": test_cameraDynamicPitch", heightPercent > 0 and "1" or "0",
+        changeSettings({ tilt = tiltPercent })
+        local label = "tilt " .. Camera.Label(tiltPercent, "Off", "tilt")
+        expectEqual(label .. ": test_cameraDynamicPitch", tiltPercent > 0 and "1" or "0",
             Camera.GetCVar(Camera.CVAR_DYNAMIC_PITCH))
-        expectNear(label .. ": " .. Camera.CVAR_PITCH_PAD, expectedPad, Camera.GetCVar(Camera.CVAR_PITCH_PAD))
-        expectNear(label .. ": " .. Camera.CVAR_PITCH_PAD_FLYING, expectedPad,
-            Camera.GetCVar(Camera.CVAR_PITCH_PAD_FLYING))
+        local expectedPad = EXPECTED_TILT_PADS[tiltPercent]
+        if expectedPad then
+            expectNear(label .. ": " .. Camera.CVAR_PITCH_PAD, expectedPad, Camera.GetCVar(Camera.CVAR_PITCH_PAD))
+            expectNear(label .. ": " .. Camera.CVAR_PITCH_PAD_FLYING, expectedPad,
+                Camera.GetCVar(Camera.CVAR_PITCH_PAD_FLYING))
+        end
     end)
 end
 

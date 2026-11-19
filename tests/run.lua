@@ -117,9 +117,9 @@ local get = function(n) return C_CVar.GetCVar(n) end
 test("registers its page under Options > AddOns, with the defaults", function()
     boot(true, nil)
     eq(game.category.name, "GamepadCameraOffset")
-    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.height, 35); eq(GamepadCameraOffsetDB.aim, 0)
+    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50); eq(GamepadCameraOffsetDB.aim, 0)
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
-    eq(game.options.height.format(35), "35% higher"); eq(game.options.height.format(0), "Normal")
+    eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
     eq(game.options.aim.format(10), "10% up"); eq(game.options.aim.format(-5), "5% down"); eq(game.options.aim.format(0), "Normal")
     SlashCmdList.GAMEPADCAMERAOFFSET("")
     eq(game.opened, 42, "/gco opens it")
@@ -132,8 +132,8 @@ test("on a controller, entering the world un-centers the camera and sets both of
     eq(game.saved.CameraKeepCharacterCentered, "1", "your saved setting untouched")
     eq(get("test_cameraOverShoulder"), "1.2")
     eq(get("test_cameraDynamicPitch"), "1")
-    eq(get("test_cameraDynamicPitchBaseFovPad"), "0.315", "35% of 0.9")
-    eq(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.315")
+    eq(get("test_cameraDynamicPitchBaseFovPad"), "0.4375", "tilt 50%: halfway from 0.75 to 0.125")
+    eq(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.4375")
 end)
 
 test("the game re-centering (a switch to the controller) is undone on the next frame, once", function()
@@ -146,12 +146,12 @@ test("the game re-centering (a switch to the controller) is undone on the next f
     eq(#game.timers, 0, "its own change queues nothing more")
 end)
 
-test("sliders apply at once; height Normal turns the pitch off", function()
+test("sliders apply at once; tilt Off turns the pitch off", function()
     boot(false, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     set("side", -50)
     eq(get("test_cameraOverShoulder"), "-1.5", "50% left")
-    set("height", 0)
+    set("tilt", 0)
     eq(get("test_cameraDynamicPitch"), "0")
     set("side", 999)
     eq(get("test_cameraOverShoulder"), "3", "clamped")
@@ -167,7 +167,7 @@ test("disabling puts the game's camera back: controller temp values, else none",
     C_CVar.SetTempCVar("CameraKeepCharacterCentered", "1")
     eq(#game.timers, 0, "disabled: the game's centering is left alone")
 
-    boot(false, { enabled = true, side = 30, height = 20 })
+    boot(false, { enabled = true, side = 30, tilt = 20 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     set("enabled", false)
     eq(game.temp.CameraKeepCharacterCentered, nil, "keyboard: no temp value left")
@@ -175,7 +175,7 @@ test("disabling puts the game's camera back: controller temp values, else none",
 end)
 
 test("disabled at login touches nothing", function()
-    boot(true, { enabled = false, side = 30, height = 20 })
+    boot(true, { enabled = false, side = 30, tilt = 20 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     eq(get("test_cameraOverShoulder"), "0")
     eq(game.temp.CameraKeepCharacterCentered, "1")
@@ -237,11 +237,11 @@ local function runUntilNoTimersLeft()
 end
 local function describeSavedSettings()
     local saved = GamepadCameraOffsetDB
-    return string.format("%s %s %s %s %s", tostring(saved.enabled), saved.side, saved.height, tostring(saved.crosshair), saved.aim)
+    return string.format("%s %s %s %s %s", tostring(saved.enabled), saved.side, saved.tilt, tostring(saved.crosshair), saved.aim)
 end
 
 test("/gco debug on a controller: every check passes, settings come back, findings saved", function()
-    boot(true, { enabled = true, side = 30, height = 20, crosshair = true, aim = -5 })
+    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = -5 })
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     runUntilNoTimersLeft()
@@ -278,7 +278,7 @@ test("/gco debug on keyboard: crosshair checks skipped, the rest pass", function
 end)
 
 test("/gco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
-    boot(true, { enabled = true, side = 30, height = 20, crosshair = true, aim = 0 })
+    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 0 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     frame(); frame()
@@ -316,7 +316,7 @@ end)
 
 test("a reload in the middle of a run: your settings are back at the next login", function()
     boot(true, { enabled = true, side = -100, height = 0, crosshair = false, aim = 0 })
-    GamepadCameraOffsetDebugDB = { runs = {}, settingsToRestore = { enabled = true, side = 30, height = 20, crosshair = true, aim = 3 } }
+    GamepadCameraOffsetDebugDB = { runs = {}, settingsToRestore = { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 3 } }
     game.fire("PLAYER_LOGIN")
     eq(describeSavedSettings(), "true 30 20 true 3")
     eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)

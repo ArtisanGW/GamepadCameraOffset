@@ -29,14 +29,22 @@ local Camera = {
 
     -- Every slider is a percentage.
     --   side:   -100 (left shoulder) to 100 (right shoulder); 100% is SIDE_YARDS_AT_FULL.
-    --   height: 0 to 100; 100% is HEIGHT_PAD_AT_FULL of the view kept above the character.
+    --   tilt:   0 (off) to 100 (strongest): tilts the camera up, so your character sits
+    --           lower on the screen and you see more ahead. See Camera.TiltPad.
     --   aim:    -25 (down) to 25 (up), in percent of the screen's height.
-    DEFAULTS = { enabled = true, side = 40, height = 35, crosshair = true, aim = 0 },
+    DEFAULTS = { enabled = true, side = 40, tilt = 50, crosshair = true, aim = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
-    HEIGHT_MIN = 0, HEIGHT_MAX = 100, HEIGHT_STEP = 5,
+    TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     AIM_MIN = -25, AIM_MAX = 25, AIM_STEP = 1,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
-    HEIGHT_PAD_AT_FULL = 0.9,     -- test_cameraDynamicPitchBaseFovPad at 100%
+    -- The game's pitch pad works backwards: the lower it is, the more the camera
+    -- tilts. Seen in game (DevCamOffset's tilt test, screenshots at 4, 15 and 39
+    -- yd, 2026-11-19): 0.125 is the strongest usable tilt, by about 0.75 there's
+    -- little left, and pad 0 is no tilt at all (so it's never sent). The tilt
+    -- grows with the zoom: at 4 yd it barely shows, at 39 yd it's strongest.
+    -- So 1% starts at 0.75 and 100% ends at 0.125.
+    TILT_PAD_AT_LIGHTEST = 0.75,
+    TILT_PAD_AT_STRONGEST = 0.125,
 
     -- Where the character sits on screen. The camera aims at the character, then
     -- slides sideways by the shoulder offset, so the character sits that many
@@ -104,6 +112,13 @@ end
 
 -- Applying and removing the offsets
 
+-- The game's pitch pad for a tilt percentage, or nil for 0% (tilt off).
+function Camera.TiltPad(tiltPercent)
+    if tiltPercent <= 0 then return nil end
+    local range = Camera.TILT_PAD_AT_LIGHTEST - Camera.TILT_PAD_AT_STRONGEST
+    return Camera.TILT_PAD_AT_LIGHTEST - range * tiltPercent / 100
+end
+
 -- Whether GamepadCameraOffset's values are on the camera now (so disabling knows to undo them).
 local offsetsApplied = false
 
@@ -117,11 +132,15 @@ function Camera.Apply()
     local sidePercent = clamp(settings.side, Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.DEFAULTS.side)
     setCVar(Camera.CVAR_OVER_SHOULDER, sidePercent / 100 * Camera.SIDE_YARDS_AT_FULL)
 
-    local heightPercent = clamp(settings.height, Camera.HEIGHT_MIN, Camera.HEIGHT_MAX, Camera.DEFAULTS.height)
-    local pitchPad = heightPercent / 100 * Camera.HEIGHT_PAD_AT_FULL
-    setCVar(Camera.CVAR_DYNAMIC_PITCH, pitchPad > 0 and 1 or 0)
-    setCVar(Camera.CVAR_PITCH_PAD, pitchPad)
-    setCVar(Camera.CVAR_PITCH_PAD_FLYING, pitchPad)
+    local tiltPercent = clamp(settings.tilt, Camera.TILT_MIN, Camera.TILT_MAX, Camera.DEFAULTS.tilt)
+    local pitchPad = Camera.TiltPad(tiltPercent)
+    if pitchPad then
+        setCVar(Camera.CVAR_DYNAMIC_PITCH, 1)
+        setCVar(Camera.CVAR_PITCH_PAD, pitchPad)
+        setCVar(Camera.CVAR_PITCH_PAD_FLYING, pitchPad)
+    else
+        setCVar(Camera.CVAR_DYNAMIC_PITCH, 0)
+    end
 
     Camera.WatchCrosshair()
 end
@@ -159,7 +178,7 @@ local function getCVarNumber(name)
 end
 
 -- The character's offset from the screen's middle, in UIParent units (x only:
--- the height setting tilts the camera around the character, which stays on
+-- the tilt setting turns the camera around the character, which stays on
 -- the middle line).
 function Camera.CharacterX()
     local shoulderYards = getCVarNumber(Camera.CVAR_OVER_SHOULDER) or 0
@@ -302,11 +321,12 @@ function Camera.RegisterSettings()
         .. "100% is the furthest the addon goes. The effect is stronger when you zoom in.",
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
-    addSetting("height", Settings.VarType.Number, "Height",
-        "Raises the camera's view so your character sits lower on the screen. Normal is the game's "
-        .. "own view; 100% is the furthest the addon goes. The effect is stronger when you zoom out.",
-        sliderOptions(Camera.HEIGHT_MIN, Camera.HEIGHT_MAX, Camera.HEIGHT_STEP,
-            function(value) return Camera.Label(value, "Normal", "higher") end))
+    addSetting("tilt", Settings.VarType.Number, "Tilt",
+        "Tilts the camera up, so your character sits lower on the screen and you see more "
+        .. "of what's ahead. Off is the game's own view; 100% is the strongest tilt. "
+        .. "The further you zoom out, the stronger it is: close up it barely shows.",
+        sliderOptions(Camera.TILT_MIN, Camera.TILT_MAX, Camera.TILT_STEP,
+            function(value) return Camera.Label(value, "Off", "tilt") end))
     addSetting("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
         "With the controller UI on, moves its aiming dot sideways so it stays in line with "
         .. "your character as the side offset and your zoom change. Only the dot moves: "
