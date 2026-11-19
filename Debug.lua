@@ -13,7 +13,7 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
-local SETTING_KEYS = { "enabled", "side", "tilt", "crosshair", "aim" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 
@@ -132,6 +132,16 @@ for _, tiltPercent in ipairs({ 0, 1, 50, 100 }) do
             expectNear(label .. ": " .. Camera.CVAR_PITCH_PAD_FLYING, expectedPad,
                 Camera.GetCVar(Camera.CVAR_PITCH_PAD_FLYING))
         end
+    end)
+end
+
+-- Tilt when looking down: the game's DownScale, the percentage as 0 to 1.
+for _, lookDownPercent in ipairs({ 0, 50, 100 }) do
+    addStep(function()
+        changeSettings({ tilt = 50, lookDown = lookDownPercent })
+        local label = "tilt when looking down " .. Camera.Label(lookDownPercent, "Fades away", "kept")
+        expectNear(label .. ": " .. Camera.CVAR_PITCH_DOWN_SCALE, lookDownPercent / 100,
+            Camera.GetCVar(Camera.CVAR_PITCH_DOWN_SCALE))
     end)
 end
 

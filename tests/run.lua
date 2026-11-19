@@ -13,6 +13,7 @@ local function boot(gamepad, saved)
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
+        test_cameraDynamicPitchBaseFovPadDownScale = "0.25",
         CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" }
     for k, v in pairs(defaults) do game.saved[k] = v end
     local function fire(event, ...)
@@ -82,7 +83,17 @@ local function boot(gamepad, saved)
     _G.GetCameraZoom = function() return game.zoom end
     _G.GetCursorCenterPosition = function() return 0, 480 end
     _G.issecretvalue = function(v) return type(v) == "table" and v.secret == true end
-    _G.hooksecurefunc = function(t, m, fn) local orig = t[m]; t[m] = function(...) local r = orig(...); fn(...); return r end end
+    _G.hooksecurefunc = function(t, m, fn)
+        if type(t) == "string" then t, m, fn = _G, t, m end   -- the global form: hooksecurefunc("Name", fn)
+        local orig = t[m]; t[m] = function(...) local r = orig(...); fn(...); return r end
+    end
+    game.consoleCommands = {}
+    _G.ConsoleExec = function(command) game.consoleCommands[#game.consoleCommands + 1] = command end
+    game.internalEvents = { EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED = true }
+    _G.GameEvent = { UnregisterInternalEvent = function(event) game.internalEvents[event] = nil end }
+    game.popupsShown = {}
+    _G.StaticPopup_Show = function(popupName) game.popupsShown[popupName] = true end
+    _G.StaticPopup_Hide = function(popupName) game.popupsShown[popupName] = nil end
     game.saved.cameraFov = "90"
     game.recenters = 0
     _G.GamepadReticle = {
@@ -134,6 +145,46 @@ test("on a controller, entering the world un-centers the camera and sets both of
     eq(get("test_cameraDynamicPitch"), "1")
     eq(get("test_cameraDynamicPitchBaseFovPad"), "0.4375", "tilt 50%: halfway from 0.75 to 0.125")
     eq(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.4375")
+    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.5", "tilt when looking down: 50% by default")
+end)
+
+test("ActionCam basic runs once before the first apply; off when disabled, basic again when enabled", function()
+    boot(false, nil)
+    eq(#game.consoleCommands, 0, "nothing before entering the world")
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    set("side", 20); set("tilt", 70)
+    eq(table.concat(game.consoleCommands, ","), "ActionCam basic", "once, however many changes")
+    set("enabled", false)
+    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
+    set("enabled", true)
+    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off,ActionCam basic")
+end)
+
+test("disabled at login runs no ActionCam command", function()
+    boot(false, { enabled = false })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(#game.consoleCommands, 0)
+end)
+
+test("the game's experimental warning: its event dropped at load, the popup hidden if shown", function()
+    boot(false, nil)
+    eq(game.internalEvents.EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED, nil, "the game no longer listens for it")
+    StaticPopup_Show("EXPERIMENTAL_CVAR_WARNING")
+    eq(game.popupsShown.EXPERIMENTAL_CVAR_WARNING, nil, "hidden at once")
+    StaticPopup_Show("SOMETHING_ELSE")
+    eq(game.popupsShown.SOMETHING_ELSE, true, "other popups untouched")
+end)
+
+test("tilt when looking down: the slider's percentage as the game's 0 to 1, labelled", function()
+    boot(false, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    set("lookDown", 80)
+    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.8")
+    set("lookDown", 500)
+    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "1", "clamped")
+    eq(game.options.lookDown.format(80), "80% kept"); eq(game.options.lookDown.format(0), "Fades away")
+    set("enabled", false)
+    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "the game's default back")
 end)
 
 test("the game re-centering (a switch to the controller) is undone on the next frame, once", function()

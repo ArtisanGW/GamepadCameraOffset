@@ -11,10 +11,18 @@
 -- whenever it sees CameraKeepCharacterCentered go back to 1.
 --
 -- The test_camera* CVars are the game's experimental camera: it clears them on
--- every reload (they're applied again at login), and the first change in a
--- session shows the game's "experimental feature" warning. Its Disable button
--- clears them again; GamepadCameraOffset leaves them cleared until you change a setting
--- or reload.
+-- every reload (they're applied again at login). Before using them, the addon
+-- turns on the game's ActionCam with the console command "ActionCam basic"
+-- (once per session; the Only Cams addon does the same and says the CVars do
+-- nothing until then; "basic", not "full", which drags the camera toward
+-- targets). Turning GamepadCameraOffset off runs "ActionCam off".
+--
+-- The first change to one of them in a session makes the game show its
+-- "experimental feature" warning (Blizzard_Game/Shared/EventImplementation.lua,
+-- HandleExperimentalCVarConfirmationNeeded). Its Disable button clears them
+-- all, so the addon stops the game listening for that event with
+-- GameEvent.UnregisterInternalEvent, the game's own way to drop an event (as
+-- SteadyCam does), and hides the warning if it shows up some other way.
 local ADDON_NAME = ...
 
 local Camera = {
@@ -22,19 +30,28 @@ local Camera = {
     CVAR_DYNAMIC_PITCH = "test_cameraDynamicPitch",
     CVAR_PITCH_PAD = "test_cameraDynamicPitchBaseFovPad",
     CVAR_PITCH_PAD_FLYING = "test_cameraDynamicPitchBaseFovPadFlying",
+    CVAR_PITCH_DOWN_SCALE = "test_cameraDynamicPitchBaseFovPadDownScale",
     CVAR_KEEP_CENTERED = "CameraKeepCharacterCentered",
     CVAR_REDUCE_MOVEMENT = "CameraReduceUnexpectedMovement",
     -- What Blizzard's controller UI puts on the temp layer (Core.lua), put back on disable.
     CONTROLLER_TEMPORARY_VALUES = { CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" },
+    ACTION_CAMERA_ON_COMMAND = "ActionCam basic",
+    ACTION_CAMERA_OFF_COMMAND = "ActionCam off",
+    EXPERIMENTAL_WARNING_EVENT = "EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED",
+    EXPERIMENTAL_WARNING_POPUP = "EXPERIMENTAL_CVAR_WARNING",
 
     -- Every slider is a percentage.
     --   side:   -100 (left shoulder) to 100 (right shoulder); 100% is SIDE_YARDS_AT_FULL.
     --   tilt:   0 (off) to 100 (strongest): tilts the camera up, so your character sits
     --           lower on the screen and you see more ahead. See Camera.TiltPad.
+    --   lookDown: 0 to 100, how much of the tilt stays when you look down at your
+    --           character (the game's DownScale, 0 to 1). 0% is the tilt fading
+    --           away entirely as you look down.
     --   aim:    -25 (down) to 25 (up), in percent of the screen's height.
-    DEFAULTS = { enabled = true, side = 40, tilt = 50, crosshair = true, aim = 0 },
+    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
+    LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
     AIM_MIN = -25, AIM_MAX = 25, AIM_STEP = 1,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
@@ -88,6 +105,10 @@ local function getCVarDefault(name, fallback)
     return succeeded and value or fallback
 end
 
+local function runConsoleCommand(command)
+    if type(ConsoleExec) == "function" then pcall(ConsoleExec, command) end
+end
+
 local function isControllerUIOn()
     return type(InputUtil) == "table" and type(InputUtil.IsGamepadUIEnabled) == "function"
         and InputUtil.IsGamepadUIEnabled() == true
@@ -119,13 +140,37 @@ function Camera.TiltPad(tiltPercent)
     return Camera.TILT_PAD_AT_LIGHTEST - range * tiltPercent / 100
 end
 
+-- The game's experimental warning: stop the game listening for its event, and
+-- hide the popup should it still be shown some other way. Done once.
+local experimentalWarningSilenced = false
+function Camera.SilenceExperimentalWarning()
+    if experimentalWarningSilenced then return end
+    experimentalWarningSilenced = true
+    if type(GameEvent) == "table" and type(GameEvent.UnregisterInternalEvent) == "function" then
+        pcall(GameEvent.UnregisterInternalEvent, Camera.EXPERIMENTAL_WARNING_EVENT)
+    end
+    if type(hooksecurefunc) == "function" and type(StaticPopup_Show) == "function" then
+        hooksecurefunc("StaticPopup_Show", function(popupName)
+            if popupName == Camera.EXPERIMENTAL_WARNING_POPUP and type(StaticPopup_Hide) == "function" then
+                StaticPopup_Hide(popupName)
+            end
+        end)
+    end
+end
+
 -- Whether GamepadCameraOffset's values are on the camera now (so disabling knows to undo them).
 local offsetsApplied = false
+-- Whether "ActionCam basic" ran since the addon last turned the camera on.
+local actionCameraOn = false
 
 function Camera.Apply()
     local settings = getSettings()
     if not settings.enabled then return Camera.Remove() end
     offsetsApplied = true
+    if not actionCameraOn then
+        actionCameraOn = true
+        runConsoleCommand(Camera.ACTION_CAMERA_ON_COMMAND)   -- before our values: it sets some of its own
+    end
     setTemporaryCVar(Camera.CVAR_KEEP_CENTERED, 0)
     setTemporaryCVar(Camera.CVAR_REDUCE_MOVEMENT, 0)
 
@@ -138,6 +183,9 @@ function Camera.Apply()
         setCVar(Camera.CVAR_DYNAMIC_PITCH, 1)
         setCVar(Camera.CVAR_PITCH_PAD, pitchPad)
         setCVar(Camera.CVAR_PITCH_PAD_FLYING, pitchPad)
+        local lookDownPercent = clamp(settings.lookDown, Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX,
+            Camera.DEFAULTS.lookDown)
+        setCVar(Camera.CVAR_PITCH_DOWN_SCALE, lookDownPercent / 100)
     else
         setCVar(Camera.CVAR_DYNAMIC_PITCH, 0)
     end
@@ -150,10 +198,15 @@ end
 function Camera.Remove()
     if not offsetsApplied then return Camera.WatchCrosshair() end
     offsetsApplied = false
+    if actionCameraOn then
+        actionCameraOn = false
+        runConsoleCommand(Camera.ACTION_CAMERA_OFF_COMMAND)
+    end
     setCVar(Camera.CVAR_OVER_SHOULDER, getCVarDefault(Camera.CVAR_OVER_SHOULDER, "0"))
     setCVar(Camera.CVAR_DYNAMIC_PITCH, getCVarDefault(Camera.CVAR_DYNAMIC_PITCH, "0"))
     setCVar(Camera.CVAR_PITCH_PAD, getCVarDefault(Camera.CVAR_PITCH_PAD, "0"))
     setCVar(Camera.CVAR_PITCH_PAD_FLYING, getCVarDefault(Camera.CVAR_PITCH_PAD_FLYING, "0"))
+    setCVar(Camera.CVAR_PITCH_DOWN_SCALE, getCVarDefault(Camera.CVAR_PITCH_DOWN_SCALE, "0"))
     for name, controllerValue in pairs(Camera.CONTROLLER_TEMPORARY_VALUES) do
         if isControllerUIOn() then setTemporaryCVar(name, controllerValue) else removeTemporaryCVar(name) end
     end
@@ -314,8 +367,8 @@ function Camera.RegisterSettings()
     addSetting("enabled", Settings.VarType.Boolean, "Enable",
         "Moves the camera with the settings below, on keyboard and on a controller. "
         .. "Turned off, the game's own camera comes back.\n\n"
-        .. "These are the game's experimental camera settings: the first change in a "
-        .. "session shows its warning. Accept keeps them.")
+        .. "These are the game's experimental camera settings (its ActionCam). "
+        .. "The game's warning about them is hidden.")
     addSetting("side", Settings.VarType.Number, "Side offset",
         "Moves the camera over your right or left shoulder. Centered is the game's normal view; "
         .. "100% is the furthest the addon goes. The effect is stronger when you zoom in.",
@@ -327,6 +380,12 @@ function Camera.RegisterSettings()
         .. "The further you zoom out, the stronger it is: close up it barely shows.",
         sliderOptions(Camera.TILT_MIN, Camera.TILT_MAX, Camera.TILT_STEP,
             function(value) return Camera.Label(value, "Off", "tilt") end))
+    addSetting("lookDown", Settings.VarType.Number, "Tilt when looking down",
+        "How much of the tilt stays when you look down at your character. At 0% it fades "
+        .. "away as the camera looks down; at 100% it stays as strong as with a level camera. "
+        .. "Only used while Tilt is on.",
+        sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
+            function(value) return Camera.Label(value, "Fades away", "kept") end))
     addSetting("crosshair", Settings.VarType.Boolean, "Crosshair follows your character",
         "With the controller UI on, moves its aiming dot sideways so it stays in line with "
         .. "your character as the side offset and your zoom change. Only the dot moves: "
@@ -357,6 +416,7 @@ eventFrame:SetScript("OnEvent", function(_, event, name)
         if name ~= ADDON_NAME then return end
         eventFrame:UnregisterEvent("ADDON_LOADED")
         getSettings()
+        Camera.SilenceExperimentalWarning()
         pcall(Camera.RegisterSettings)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- The controller UI sets its temp values around now too: apply after it.
