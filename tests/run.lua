@@ -230,15 +230,6 @@ test("a secret zoom leaves the crosshair where it was", function()
     eq(GamepadReticle.point[3], x)
 end)
 
-test("settings saved in yards and UI units are converted to percentages once", function()
-    boot(true, { enabled = true, horizontal = 1.3, vertical = 0.3, crosshair = true, crosshairHeight = -120 })
-    local d = GamepadCameraOffsetDB
-    eq(d.side, 45, "1.3 of 3 yd, to the nearest 5%"); eq(d.height, 35, "0.3 of 0.9"); eq(d.aim, -16, "-120 of 768")
-    eq(d.horizontal, nil); eq(d.vertical, nil); eq(d.crosshairHeight, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(get("test_cameraOverShoulder"), "1.35")
-end)
-
 -- /gco debug: the in-game suite, run here against the fake game.
 local function runUntilNoTimersLeft()
     for _ = 1, 200 do if #game.timers == 0 then return end; frame() end

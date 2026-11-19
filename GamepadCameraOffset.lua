@@ -87,7 +87,6 @@ end
 
 -- Saved settings
 
-local function roundToStep(value, step) return math.floor(value / step + 0.5) * step end
 
 local function clamp(value, minimum, maximum, fallback)
     value = tonumber(value)
@@ -95,33 +94,9 @@ local function clamp(value, minimum, maximum, fallback)
     return math.max(minimum, math.min(maximum, value))
 end
 
--- Settings saved before the sliders were percentages (yards, a 0-0.9 share, UI
--- units) are converted once, to the nearest step.
-local function convertOldSettings(saved)
-    local oldSideYards = tonumber(saved.horizontal)
-    local oldHeightShare = tonumber(saved.vertical)
-    local oldCrosshairUnits = tonumber(saved.crosshairHeight)
-    if saved.side == nil and oldSideYards then
-        local percent = roundToStep(oldSideYards / Camera.SIDE_YARDS_AT_FULL * 100, Camera.SIDE_STEP)
-        saved.side = clamp(percent, Camera.SIDE_MIN, Camera.SIDE_MAX)
-    end
-    if saved.height == nil and oldHeightShare then
-        local percent = roundToStep(oldHeightShare / Camera.HEIGHT_PAD_AT_FULL * 100, Camera.HEIGHT_STEP)
-        saved.height = clamp(percent, Camera.HEIGHT_MIN, Camera.HEIGHT_MAX)
-    end
-    if saved.aim == nil and oldCrosshairUnits then
-        local screenHeight = UIParent and UIParent:GetHeight() or 768
-        if not screenHeight or screenHeight <= 0 then screenHeight = 768 end
-        local percent = roundToStep(oldCrosshairUnits / screenHeight * 100, Camera.AIM_STEP)
-        saved.aim = clamp(percent, Camera.AIM_MIN, Camera.AIM_MAX)
-    end
-    saved.horizontal, saved.vertical, saved.crosshairHeight = nil, nil, nil
-end
-
 local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
-    convertOldSettings(settings)
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
     end
