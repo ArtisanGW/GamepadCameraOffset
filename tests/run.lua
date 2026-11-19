@@ -102,11 +102,24 @@ local function boot(gamepad, saved)
         SetPoint = function(self, p, rel, rp, x, y) self.point = { p, rp, x, y, relativeTo = rel } end,
         GetPoint = function(self) local q = self.point; if q then return q[1], q.relativeTo or UIParent, q[2], q[3], q[4] end end,
         Recenter = function(self) game.recenters = game.recenters + 1; self.point = { "CENTER", "BOTTOM", 0, 320 } end,
+        Icons = { StandardIcon = { color = { 1, 1, 1, 1 }, SetVertexColor = function(self, r, g, b, a) self.color = { r, g, b, a } end } },
     }
     -- Units and their nameplates: game.units[unit] = true, game.nameplates[unit] = a frame.
     game.units, game.nameplates = {}, {}
     _G.UnitExists = function(unit) return game.units[unit] == true end
     _G.GetPhysicalScreenSize = function() return 2304, 1536 end
+    game.buttons = {}
+    _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip)
+        return { name = name, buttonText = buttonText, onClick = onClick, tooltip = tooltip }
+    end
+    local function addInitializer(_, initializer) game.buttons[#game.buttons + 1] = initializer end
+    _G.SettingsPanel = { GetLayout = function() return { AddInitializer = addInitializer } end }
+    game.picker = {}
+    _G.ColorPickerFrame = {
+        SetupColorPickerAndShow = function(self, info) game.picker.info = info; game.picker.shown = true end,
+        GetColorRGB = function() return game.picker.red, game.picker.green, game.picker.blue end,
+        GetColorAlpha = function() return game.picker.alpha end,
+    }
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
@@ -324,6 +337,56 @@ test("crosshair off, GamepadCameraOffset off or keyboard: the game's crosshair i
     game.fire("PLAYER_TARGET_CHANGED"); frame()
     eq(GamepadReticle.point, nil, "keyboard: never touched")
     eq(game.recenters, 0)
+end)
+
+test("the crosshair goes under the part of the nameplate you see: health bar, else the name", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local function part(visible) return { IsVisible = function() return visible end } end
+    local healthBar, name = part(true), part(true)
+    local plate = { UnitFrame = { healthBar = healthBar, name = name } }
+    game.units.target = true; game.nameplates.target = plate
+    game.fire("PLAYER_TARGET_CHANGED"); frame()
+    eq(GamepadReticle.point.relativeTo, healthBar, "under the health bar")
+    plate.UnitFrame.healthBar = part(false)
+    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate1"); frame()
+    eq(GamepadReticle.point.relativeTo, name, "names only (a friendly player): under the name")
+end)
+
+local function dotColor()
+    local color = GamepadReticle.Icons.StandardIcon.color
+    return string.format("%.2f %.2f %.2f %.2f", color[1], color[2], color[3], color[4])
+end
+
+test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or the game's color picker, white when off", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(GamepadCameraOffsetDB.crosshairColor, "FFFFFFFF", "white by default")
+    eq(dotColor(), "1.00 1.00 1.00 1.00")
+    SlashCmdList.GAMEPADCAMERAOFFSET("color FF3030CC")
+    eq(GamepadCameraOffsetDB.crosshairColor, "FF3030CC")
+    eq(dotColor(), "1.00 0.19 0.19 0.80", "tinted at once")
+    SlashCmdList.GAMEPADCAMERAOFFSET("color nonsense")
+    eq(GamepadCameraOffsetDB.crosshairColor, "FF3030CC", "a wrong color changes nothing")
+    eq(game.printed[#game.printed]:find("usage", 1, true) ~= nil, true, "and says how")
+    SlashCmdList.GAMEPADCAMERAOFFSET("color #00ff00")
+    eq(GamepadCameraOffsetDB.crosshairColor, "00FF00FF", "six digits: opaque")
+
+    eq(#game.buttons, 1, "a Crosshair color button on the settings page")
+    eq(game.buttons[1].name, "Crosshair color")
+    game.buttons[1].onClick()
+    eq(game.picker.shown, true, "opens the game's color picker")
+    eq(game.picker.info.hasOpacity, true, "with opacity")
+    game.picker.red, game.picker.green, game.picker.blue, game.picker.alpha = 0, 0, 1, 0.5
+    game.picker.info.swatchFunc()
+    eq(GamepadCameraOffsetDB.crosshairColor, "0000FF80", "the picked color, alpha last")
+    game.picker.info.cancelFunc()
+    eq(GamepadCameraOffsetDB.crosshairColor, "00FF00FF", "cancel: the color it had")
+
+    set("crosshair", false)
+    eq(dotColor(), "1.00 1.00 1.00 1.00", "crosshair setting off: the game's own white")
+    set("crosshair", true)
+    eq(dotColor(), "0.00 1.00 0.00 1.00", "and back")
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.

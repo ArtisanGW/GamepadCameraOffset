@@ -13,7 +13,7 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
-local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim", "crosshairColor" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 
@@ -89,7 +89,8 @@ local function checkCrosshair(label, offsetPixels)
     if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
     if Camera.CrosshairTargetNameplate() then
         local _, anchoredTo, _, _, heightFromNameplate = GamepadReticle:GetPoint(1)
-        expectEqual(name .. ": on the target's nameplate", true, anchoredTo == Camera.CrosshairTargetNameplate())
+        expectEqual(name .. ": on the target's nameplate", true,
+            anchoredTo == Camera.VisibleNameplatePart(Camera.CrosshairTargetNameplate()))
         return expectNear(name .. ": height from the nameplate",
             -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(GamepadReticle, offsetPixels), heightFromNameplate, 1)
     end

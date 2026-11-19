@@ -51,7 +51,9 @@ local Camera = {
     --           screen pixels from just below its nameplate. Pixels, not a percentage:
     --           a nameplate keeps its size on screen at any distance, so a pixel
     --           offset puts the dot at the same place on it.
-    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
+    --   crosshairColor: the crosshair dot's color, 32 bits as "RRGGBBAA" (hex, alpha last).
+    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0,
+        crosshairColor = "FFFFFFFF" },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
@@ -271,6 +273,19 @@ function Camera.PixelsToFrameUnits(frame, pixels)
     return pixels * Camera.SCREEN_HEIGHT_IN_UNITS / physicalHeight / scale
 end
 
+-- The part of a nameplate you see: its health bar, or with names only (friendly
+-- players, as an option) its name, else the whole plate. The plate keeps its
+-- full size either way, so its own bottom can sit well below a name.
+function Camera.VisibleNameplatePart(nameplate)
+    local unitFrame = nameplate.UnitFrame
+    if type(unitFrame) == "table" then
+        for _, part in ipairs({ unitFrame.healthBar, unitFrame.name }) do
+            if type(part) == "table" and type(part.IsVisible) == "function" and part:IsVisible() then return part end
+        end
+    end
+    return nameplate
+end
+
 -- The crosshair's unit: the first of CROSSHAIR_TARGET_UNITS that exists. Then its
 -- nameplate, if it has one, and the unit.
 function Camera.CrosshairTargetNameplate()
@@ -298,10 +313,11 @@ function Camera.PlaceCrosshair()
     end
     local nameplate = Camera.CrosshairTargetNameplate()
     if nameplate then
+        local anchor = Camera.VisibleNameplatePart(nameplate)
         local offsetPixels = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
         local heightFromNameplate = -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(crosshairFrame, offsetPixels)
         crosshairFrame:ClearAllPoints()
-        crosshairFrame:SetPoint("CENTER", nameplate, "BOTTOM", 0, heightFromNameplate)
+        crosshairFrame:SetPoint("CENTER", anchor, "BOTTOM", 0, heightFromNameplate)
         crosshairPlacedOn = "nameplate"
         return
     end
@@ -347,6 +363,65 @@ function Camera.WatchCrosshair()
         else crosshairEventFrame:UnregisterEvent(event) end
     end
     Camera.PlaceCrosshair()
+    Camera.ColorCrosshair()
+end
+
+-- The crosshair's color: "RRGGBBAA" (32 bits) as 0-1 red, green, blue, alpha, or nil.
+function Camera.ParseColor(text)
+    if type(text) ~= "string" then return nil end
+    local hex = text:gsub("^#", ""):upper()
+    if #hex == 6 then hex = hex .. "FF" end
+    if not hex:match("^%x%x%x%x%x%x%x%x$") then return nil end
+    local channels = {}
+    for i = 1, 4 do channels[i] = tonumber(hex:sub(i * 2 - 1, i * 2), 16) / 255 end
+    return channels[1], channels[2], channels[3], channels[4], hex
+end
+
+function Camera.FormatColor(red, green, blue, alpha)
+    local function byte(value) return math.floor(math.max(0, math.min(1, value or 1)) * 255 + 0.5) end
+    return string.format("%02X%02X%02X%02X", byte(red), byte(green), byte(blue), byte(alpha))
+end
+
+-- Tints the crosshair's dot (Blizzard's GamepadReticle.Icons.StandardIcon), or puts
+-- its own white back when the crosshair setting is off. Only when settings change.
+function Camera.ColorCrosshair()
+    local crosshairFrame = _G.GamepadReticle
+    local dot = type(crosshairFrame) == "table" and crosshairFrame.Icons and crosshairFrame.Icons.StandardIcon
+    if type(dot) ~= "table" or type(dot.SetVertexColor) ~= "function" then return end
+    local red, green, blue, alpha = 1, 1, 1, 1
+    if shouldMoveCrosshair() then
+        red, green, blue, alpha = Camera.ParseColor(getSettings().crosshairColor)
+        if not red then red, green, blue, alpha = 1, 1, 1, 1 end
+    end
+    dot:SetVertexColor(red, green, blue, alpha)
+end
+
+function Camera.SetCrosshairColor(text)
+    local red, green, blue, alpha, hex = Camera.ParseColor(text)
+    if not red then return false end
+    getSettings().crosshairColor = hex
+    Camera.ColorCrosshair()
+    return true
+end
+
+-- The game's color picker, with opacity, on the crosshair's color. Cancel puts
+-- back the color it had.
+function Camera.OpenCrosshairColorPicker()
+    local picker = _G.ColorPickerFrame
+    if type(picker) ~= "table" or type(picker.SetupColorPickerAndShow) ~= "function" then return end
+    local colorBefore = getSettings().crosshairColor
+    local red, green, blue, alpha = Camera.ParseColor(colorBefore)
+    if not red then red, green, blue, alpha = 1, 1, 1, 1 end
+    local function takePickedColor()
+        local pickedRed, pickedGreen, pickedBlue = picker:GetColorRGB()
+        local pickedAlpha = type(picker.GetColorAlpha) == "function" and picker:GetColorAlpha() or 1
+        Camera.SetCrosshairColor(Camera.FormatColor(pickedRed, pickedGreen, pickedBlue, pickedAlpha))
+    end
+    picker:SetupColorPickerAndShow({
+        r = red, g = green, b = blue, opacity = alpha, hasOpacity = true,
+        swatchFunc = takePickedColor, opacityFunc = takePickedColor,
+        cancelFunc = function() Camera.SetCrosshairColor(colorBefore) end,
+    })
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -440,6 +515,17 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
+    -- The crosshair's color: a button opening the game's color picker.
+    if type(CreateSettingsButtonInitializer) == "function" and SettingsPanel and SettingsPanel.GetLayout then
+        local layout = SettingsPanel:GetLayout(category)
+        local colorButton = CreateSettingsButtonInitializer("Crosshair color", "Choose",
+            function() Camera.OpenCrosshairColorPicker() end,
+            "The color and opacity of the controller's aiming dot, e.g. to see it better on the "
+            .. "ground. Also from chat: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF.",
+            true)
+        if layout and layout.AddInitializer then layout:AddInitializer(colorButton) end
+    end
+
     Settings.RegisterAddOnCategory(category)
 end
 
@@ -479,5 +565,13 @@ SLASH_GAMEPADCAMERAOFFSET1 = "/gco"
 SlashCmdList.GAMEPADCAMERAOFFSET = function(message)
     local command, arguments = tostring(message or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
     if command == "debug" and Camera.Debug then return Camera.Debug.Command(arguments) end
+    if command == "color" then
+        if Camera.SetCrosshairColor(arguments) then
+            print("|cff88ccffGamepad Camera Offset|r crosshair color: " .. getSettings().crosshairColor)
+        else
+            print("|cff88ccffGamepad Camera Offset|r usage: /gco color RRGGBBAA (hex, alpha last), e.g. /gco color FF3030FF")
+        end
+        return
+    end
     Camera.Open()
 end
