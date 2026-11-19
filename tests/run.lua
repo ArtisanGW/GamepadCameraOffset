@@ -131,7 +131,7 @@ local get = function(n) return C_CVar.GetCVar(n) end
 
 test("registers its page under Options > AddOns, with the defaults", function()
     boot(true, nil)
-    eq(game.category.name, "GamepadCameraOffset")
+    eq(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
     eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50); eq(GamepadCameraOffsetDB.aim, 0)
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
     eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")

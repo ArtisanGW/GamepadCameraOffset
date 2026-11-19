@@ -1,5 +1,5 @@
 -- GamepadCameraOffset: moves the camera sideways (over the shoulder) and up, keyboard or
--- controller. Settings sit in the game's Options > AddOns > GamepadCameraOffset.
+-- controller. Settings sit in the game's Options > AddOns > Gamepad Camera Offset.
 --
 -- Why the controller needed more than the CVars: when the controller UI starts,
 -- Blizzard_Gamepad/Core.lua (SetupCVarsForInputMode) puts
@@ -340,7 +340,7 @@ Camera.GetCVarDefault = getCVarDefault
 Camera.IsControllerUIOn = isControllerUIOn
 Camera.GetAimHeight = getAimHeight
 
--- Settings: Options > AddOns > GamepadCameraOffset
+-- Settings: Options > AddOns > Gamepad Camera Offset
 
 -- A slider's label: zero as a word ("Centered", "Normal"), the rest as a whole
 -- percentage with a direction ("40% right", "10% down").
@@ -363,7 +363,7 @@ end
 function Camera.RegisterSettings()
     if not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting) then return end
     local settings = getSettings()
-    local category = Settings.RegisterVerticalLayoutCategory("GamepadCameraOffset")
+    local category = Settings.RegisterVerticalLayoutCategory("Gamepad Camera Offset")
     Camera.category = category
 
     local function addSetting(key, valueType, label, tooltip, options)
