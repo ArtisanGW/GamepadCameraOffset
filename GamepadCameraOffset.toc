@@ -7,6 +7,7 @@
 ## Category: Gamepad
 
 GamepadCameraOffset.lua
+Nameplates.lua
 #@do-not-package@
 # /gco debug, the in-game test suite: not in the release zip (.pkgmeta)
 Debug.lua

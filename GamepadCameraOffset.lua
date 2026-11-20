@@ -412,7 +412,7 @@ end
 function Camera.RegisterSettings()
     if not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting) then return end
     local settings = getSettings()
-    local category = Settings.RegisterVerticalLayoutCategory("Gamepad Camera Offset")
+    local category, layout = Settings.RegisterVerticalLayoutCategory("Gamepad Camera Offset")
     Camera.category = category
 
     local function addSetting(key, valueType, label, tooltip, options)
@@ -461,6 +461,7 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
+    if Camera.AddNameplatesButton then Camera.AddNameplatesButton(layout) end   -- Nameplates.lua
     Settings.RegisterAddOnCategory(category)
 end
 

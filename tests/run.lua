@@ -10,13 +10,19 @@ local function eq(a, b, msg) if a ~= b then error((msg or "") .. ": expected " .
 
 local game
 -- releaseBuild: as in the release zip, without Debug.lua (see .pkgmeta).
-local function boot(gamepad, saved, releaseBuild)
+-- nameplateOptions: { enemies, friends, classColors } as "0"/"1" (default all "0"),
+-- refuse = true: the game won't take a change to them.
+local function boot(gamepad, saved, releaseBuild, nameplateOptions)
+    nameplateOptions = nameplateOptions or {}
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
         test_cameraDynamicPitchBaseFovPadDownScale = "0.25",
         CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" }
     for k, v in pairs(defaults) do game.saved[k] = v end
+    game.saved.nameplateShowEnemies = nameplateOptions.enemies or "0"
+    game.saved.nameplateShowFriendlyPlayers = nameplateOptions.friends or "0"
+    game.saved.nameplateShowFriendlyClassColor = nameplateOptions.classColors or "0"
     local function fire(event, ...)
         for _, f in ipairs(game.frames) do if f.ev[event] and f.script then f.script(f, event, ...) end end
     end
@@ -25,7 +31,10 @@ local function boot(gamepad, saved, releaseBuild)
     if gamepad then game.temp.CameraKeepCharacterCentered = "1"; game.temp.CameraReduceUnexpectedMovement = "0" end
     _G.C_CVar = {
         GetCVar = function(n) if game.temp[n] ~= nil then return game.temp[n] end return game.saved[n] end,
-        SetCVar = function(n, v) game.saved[n] = v; changed(n); return true end,
+        SetCVar = function(n, v)
+            if nameplateOptions.refuse and n:find("^nameplate") then return false end
+            game.saved[n] = v; changed(n); return true
+        end,
         SetTempCVar = function(n, v) game.temp[n] = v; changed(n) end,
         RemoveTempCVar = function(n) game.temp[n] = nil; changed(n) end,
         GetCVarDefault = function(n) return defaults[n] end,
@@ -34,7 +43,7 @@ local function boot(gamepad, saved, releaseBuild)
     _G.C_Timer = { After = function(_, fn) game.timers[#game.timers + 1] = fn end }
     local function newFakeRegion()
         local fakeRegion = {}
-        for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks" }) do
+        for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse" }) do
             fakeRegion[methodName] = function() end
         end
         function fakeRegion:SetText(text) self.label = text end
@@ -62,7 +71,9 @@ local function boot(gamepad, saved, releaseBuild)
     _G.MinimalSliderWithSteppersMixin = { Label = { Right = 2 } }
     _G.Settings = {
         VarType = { Boolean = "boolean", Number = "number" },
-        RegisterVerticalLayoutCategory = function(name) return { name = name, GetID = function() return 42 end } end,
+        RegisterVerticalLayoutCategory = function(name)
+            return { name = name, GetID = function() return 42 end }, { AddInitializer = function(_, initializer) game.buttons[#game.buttons + 1] = initializer end }
+        end,
         RegisterAddOnSetting = function(cat, variable, key, tbl, kind, label, def)
             if tbl[key] == nil then tbl[key] = def end
             local s = { variable = variable, key = key, tbl = tbl }
@@ -135,11 +146,13 @@ local function boot(gamepad, saved, releaseBuild)
     _G.GamepadCameraOffsetDB = saved
     _G.GamepadCameraOffsetDebugDB = nil
     _G.GamepadCameraOffsetDebugBox = nil
+    _G.GamepadCameraOffsetNameplatesBox = nil
     local printed = {}
     game.printed = printed
     _G.print = function(t) printed[#printed + 1] = t end
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("Nameplates.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
@@ -373,6 +386,73 @@ test("no crosshair color here any more: the dot keeps its own, /gco color opens 
     eq(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
 end)
 
+-- Nameplates for "Crosshair on your target"
+
+local function nameplatesBox() return _G.GamepadCameraOffsetNameplatesBox end
+local function nameplateValues()
+    return game.saved.nameplateShowEnemies .. game.saved.nameplateShowFriendlyPlayers .. game.saved.nameplateShowFriendlyClassColor
+end
+
+test("first launch: a box says which nameplate settings are off; Turn on turns those on; asked once", function()
+    boot(true, nil, false, { enemies = "1" })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local box = nameplatesBox()
+    eq(box and box.shown, true, "the box")
+    eq(box.text.label:find("friendly player nameplates, class colors on friendly player nameplates", 1, true) ~= nil, true,
+        "names the two that are off: " .. box.text.label)
+    eq(box.text.label:find("enemy nameplates", 1, true), nil, "not the one already on")
+    eq(nameplateValues(), "100", "nothing changed before the click")
+    box.turnOnButton.click()
+    eq(nameplateValues(), "111", "turned on")
+    eq(box.shown, false)
+    eq(GamepadCameraOffsetDB.nameplatesAsked, true)
+    boot(true, GamepadCameraOffsetDB, false, { enemies = "1" })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(nameplatesBox(), nil, "the next launch doesn't ask again")
+end)
+
+test("No thanks changes nothing; the settings page's button asks again", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    nameplatesBox().noButton.click()
+    eq(nameplateValues(), "000", "nothing changed")
+    eq(GamepadCameraOffsetDB.crosshair, true, "the crosshair setting kept")
+    local button
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
+    eq(button.buttonText, "Turn on nameplates...")
+    button.onClick()
+    eq(nameplatesBox().shown, true, "asked again")
+end)
+
+test("no box when the nameplates are on, or the crosshair setting is off", function()
+    boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(nameplatesBox(), nil, "all on")
+    boot(true, { crosshair = false })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(nameplatesBox(), nil, "crosshair setting off: not needed")
+end)
+
+test("first launch in a fight: the box waits for its end", function()
+    boot(true, nil)
+    game.combat = true
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(nameplatesBox(), nil, "not in combat")
+    eq(GamepadCameraOffsetDB.nameplatesAsked, true, "asked, after the fight")
+    game.combat = false
+    game.fire("PLAYER_REGEN_ENABLED")
+    eq(nameplatesBox().shown, true, "after the fight")
+end)
+
+test("if the game won't take the nameplate settings, Crosshair on your target goes off and says why", function()
+    boot(true, nil, false, { refuse = true })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    nameplatesBox().turnOnButton.click()
+    eq(nameplateValues(), "000")
+    eq(GamepadCameraOffsetDB.crosshair, false, "the setting that needs them, off")
+    eq(game.printed[#game.printed]:find("couldn't turn on", 1, true) ~= nil, true, game.printed[#game.printed])
+end)
+
 -- /gco debug: the in-game suite, run here against the fake game.
 local function runUntilNoTimersLeft()
     for _ = 1, 200 do if #game.timers == 0 then return end; frame() end
@@ -498,7 +578,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua", "the release .toc loads only the addon")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Nameplates.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
