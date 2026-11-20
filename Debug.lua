@@ -1,6 +1,6 @@
 -- /gco debug: an in-game test suite. It runs through the settings one step at a
 -- time (a step every Debug.SECONDS_BETWEEN_STEPS, so you can watch the camera
--- move), checks what the game actually took (the CVars, the crosshair's place),
+-- move), checks what the game actually took (the CVars),
 -- puts your own settings back, and keeps the findings in
 -- GamepadCameraOffsetDebugDB, which the game writes to disk on /reload or logout.
 --   /gco debug         runs the suite (out of combat)
@@ -13,7 +13,7 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
-local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 
@@ -72,45 +72,13 @@ local function changeSettings(newValues)
     Camera.Apply()
 end
 
-local function canCheckCrosshair()
-    return Camera.IsControllerUIOn() and type(_G.GamepadReticle) == "table"
-        and type(GamepadReticle.GetPoint) == "function"
-end
-
-local function getCrosshairPosition()
-    local succeeded, _, _, _, x, y = pcall(GamepadReticle.GetPoint, GamepadReticle, 1)
-    if succeeded then return x, y end
-end
-
--- With a target, the crosshair is on its nameplate; with none, in the middle at
--- the game's aim height, whatever the side offset (the vertical offset is for targets).
-local function checkCrosshair(label, offsetPixels)
-    local name = "crosshair at " .. label
-    if not canCheckCrosshair() then return skipCheck(name, "controller UI off") end
-    if Camera.CrosshairTargetNameplate() then
-        -- Anchored to a nameplate, the crosshair can't be measured (a restricted
-        -- region): the addon's own record of where it put it is checked instead.
-        local placement = Camera.CrosshairPlacement()
-        expectEqual(name .. ": on the target's nameplate", true, placement ~= nil
-            and placement.anchor == Camera.VisibleNameplatePart(Camera.CrosshairTargetNameplate()))
-        return expectNear(name .. ": height from the nameplate",
-            -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(GamepadReticle, offsetPixels),
-            placement and placement.height, 1)
-    end
-    local aimHeight = Camera.GetAimHeight(GamepadReticle)
-    if not aimHeight then return skipCheck(name, "the game's aim height can't be read") end
-    local x, y = getCrosshairPosition()
-    expectNear(name .. ": x, in the middle, where the game aims", 0, x, 1)
-    expectNear(name .. ": y, the game's aim height (the vertical offset is for targets)", aimHeight, y, 1)
-end
-
 -- The steps, one every SECONDS_BETWEEN_STEPS.
 
 local STEPS = {}
 local function addStep(stepFunction) STEPS[#STEPS + 1] = stepFunction end
 
 addStep(function()
-    changeSettings({ enabled = true, side = 45, tilt = 50, crosshair = true, aim = 0 })
+    changeSettings({ enabled = true, side = 45, tilt = 50 })
     expectEqual("settings page registered", true, Camera.category ~= nil)
     expectEqual("enabled: camera un-centered (CameraKeepCharacterCentered)", "0",
         Camera.GetCVar(Camera.CVAR_KEEP_CENTERED))
@@ -123,7 +91,6 @@ for _, sidePercent in ipairs({ -100, -50, 0, 50, 100 }) do
         local label = "side " .. Camera.Label(sidePercent, "Centered", "right", "left")
         expectNear(label .. ": test_cameraOverShoulder", sidePercent / 100 * Camera.SIDE_YARDS_AT_FULL,
             Camera.GetCVar(Camera.CVAR_OVER_SHOULDER))
-        checkCrosshair(label, 0)
     end)
 end
 
@@ -157,24 +124,9 @@ for _, lookDownPercent in ipairs({ 0, 50, 100 }) do
     end)
 end
 
-for _, offsetPixels in ipairs({ 40, -40, 0 }) do
-    addStep(function()
-        changeSettings({ side = 50, aim = offsetPixels })
-        checkCrosshair("crosshair vertical offset " .. Camera.Label(offsetPixels, "Default", "up", "down", "px"), offsetPixels)
-    end)
-end
-
-addStep(function()
-    changeSettings({ crosshair = false })
-    if not canCheckCrosshair() then return skipCheck("crosshair off", "controller UI off") end
-    local x = getCrosshairPosition()
-    expectNear("crosshair off: back in the middle, where the game puts it", 0, x, 1)
-end)
-
 -- The game re-centering (as on a reload or a switch to the controller): the
 -- addon should take the camera back on the next frame.
 addStep(function()
-    changeSettings({ crosshair = true })
     if C_CVar and C_CVar.SetTempCVar then pcall(C_CVar.SetTempCVar, Camera.CVAR_KEEP_CENTERED, "1") end
 end)
 addStep(function()
@@ -273,7 +225,6 @@ local function describeEnvironment()
         end
     end
     environment.controllerUI = Camera.IsControllerUIOn()
-    environment.crosshairFound = type(_G.GamepadReticle) == "table"
     environment.zoom = type(GetCameraZoom) == "function" and tonumber(GetCameraZoom()) or nil
     environment.cameraFov = Camera.GetCVar("cameraFov")
     environment.screenHeight = UIParent:GetHeight()

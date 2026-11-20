@@ -1,16 +1,18 @@
--- A hint on the settings page: Gamepad Crosshair Customizer, a separate addon,
--- customizes the controller's crosshair (shape, size, color, border, an icon on
--- your target). Shown only when it isn't installed; its button opens the popup
--- (Popup.lua) with the download link selected to copy (the game can't open a web
--- page) and a Reload for once it's installed. The other
--- addon is named here only as text: nothing calls it or depends on it.
+-- A hint on the settings page: Gamepad Reticle On Target, a separate addon, puts
+-- the controller's reticle under your target's nameplate ("Crosshair on your
+-- target" was part of this addon until 1.7.0). Shown only when it isn't
+-- installed; its button opens the popup (Popup.lua) with the download link
+-- selected to copy (the game can't open a web page) and a Reload for once it's
+-- installed. If you had that setting on, the same popup opens once at login to
+-- say where it went. The other addon is named here only as text: nothing calls
+-- it or depends on it.
 local Camera = _G.GamepadCameraOffset
 
 local RelatedAddon = {
-    NAME = "GamepadCrosshairCustomizer",
-    TITLE = "Gamepad Crosshair Customizer",
-    -- CurseForge's permanent short address for its project (redirects to its page).
-    LINK = "https://www.curseforge.com/projects/1818557",
+    NAME = "GamepadReticleOnTarget",
+    TITLE = "Gamepad Reticle On Target",
+    -- GitHub until it has a CurseForge project.
+    LINK = "https://github.com/ArtisanGW/GamepadReticleOnTarget",
 }
 Camera.RelatedAddon = RelatedAddon
 
@@ -22,9 +24,9 @@ function RelatedAddon.Installed()
 end
 
 -- Its link to copy, and a Reload for once it's installed (Popup.lua).
-function RelatedAddon.ShowLink()
+function RelatedAddon.ShowLink(intro)
     Camera.Popup.Show({
-        text = "To get " .. RelatedAddon.TITLE .. ":\n"
+        text = (intro or "") .. "To get " .. RelatedAddon.TITLE .. ":\n"
             .. "• Copy the link (Ctrl+C)\n"
             .. "• Install it\n"
             .. "• Reload",
@@ -39,8 +41,18 @@ function Camera.AddRelatedAddonButton(layout)
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
     layout:AddInitializer(CreateSettingsButtonInitializer(RelatedAddon.TITLE, "Get " .. RelatedAddon.TITLE,
         function() RelatedAddon.ShowLink() end,
-        "Customizes the controller's crosshair:\n\n"
-        .. "• Its shape, size, color and border\n"
-        .. "• An icon on your target: its class, a raid marker\n\n"
+        "Puts the controller's reticle just below your target's nameplate.\n\n"
+        .. "It was \"Crosshair on your target\" here before 1.7.0.\n\n"
         .. "A separate addon; this one works without it.", true))
 end
+
+-- Once, at the first login after the update, for those who had it on.
+RelatedAddon.eventFrame = CreateFrame("Frame")
+RelatedAddon.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+RelatedAddon.eventFrame:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    if not Camera.reticleMoved or RelatedAddon.Installed() then return end
+    Camera.reticleMoved = nil
+    RelatedAddon.ShowLink("Gamepad Camera Offset\n\n\"Crosshair on your target\" is now its own addon, "
+        .. RelatedAddon.TITLE .. ". The camera settings stay here.\n\n")
+end)

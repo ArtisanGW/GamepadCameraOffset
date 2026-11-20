@@ -14,7 +14,7 @@ local game
 -- refuse = true: the game won't take a change to them.
 local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     nameplateOptions = nameplateOptions or {}
-    _G.C_AddOns = { DoesAddOnExist = function(name) return nameplateOptions.customizerInstalled == true and name == "GamepadCrosshairCustomizer" end }
+    _G.C_AddOns = { DoesAddOnExist = function(name) return nameplateOptions.reticleAddonInstalled == true and name == "GamepadReticleOnTarget" end }
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
@@ -185,7 +185,6 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("Nameplates.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("RelatedAddon.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
@@ -201,10 +200,12 @@ local get = function(n) return C_CVar.GetCVar(n) end
 test("registers its page under Options > AddOns, with the defaults", function()
     boot(true, nil)
     eq(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
-    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50); eq(GamepadCameraOffsetDB.aim, 0)
+    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50)
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
     eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
-    eq(game.options.aim.format(10), "10 px up"); eq(game.options.aim.format(-5), "5 px down"); eq(game.options.aim.format(0), "Default")
+    eq(game.options.aim, nil, "no reticle offset here any more")
+    eq(game.settings.GamepadCameraOffset_crosshair, nil, "no reticle setting either")
+    eq(SLASH_GAMEPADCAMERAOFFSET1, "/gco"); eq(SLASH_GAMEPADCAMERAOFFSET2, "/gamepadcameraoffset")
     SlashCmdList.GAMEPADCAMERAOFFSET("")
     eq(game.opened, 42, "/gco opens it")
 end)
@@ -307,7 +308,6 @@ test("disabled at login touches nothing", function()
     eq(game.temp.CameraKeepCharacterCentered, "1")
 end)
 
-local function tick() for _, f in ipairs(game.frames) do if f.update and f.shown then f.update(f) end end end
 local function near(a, b, msg) if math.abs(a - b) > 0.01 then error((msg or "") .. ": expected " .. b .. ", got " .. a, 2) end end
 
 local function onUpdateFramesShown()
@@ -315,98 +315,6 @@ local function onUpdateFramesShown()
     for _, f in ipairs(game.frames) do if f.update and f.shown then count = count + 1 end end
     return count
 end
-
-test("controller, no target: the crosshair stays where the game aims, whatever the side and zoom, with nothing per frame", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local p = GamepadReticle.point
-    near(p[3], 0, "x: the middle, where the controller's targeting aims")
-    near(p[4], 320, "the game's aim height (480 / scale 1.5)")
-    eq(GamepadReticle.point.relativeTo, UIParent)
-    game.zoom = 20; set("side", -50)
-    near(GamepadReticle.point[3], 0, "the side offset doesn't move it")
-    set("aim", 5)
-    near(GamepadReticle.point[4], 320, "the vertical offset is for targets: no target, the game's own height")
-    eq(onUpdateFramesShown(), 0, "no frame runs every frame")
-end)
-
-test("controller, a target: the crosshair goes under its nameplate, re-placed only when the target or plates change", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local targetPlate, softPlate = { name = "target's plate" }, { name = "soft target's plate" }
-    game.units.softenemy = true; game.nameplates.softenemy = softPlate
-    game.fire("PLAYER_SOFT_ENEMY_CHANGED"); frame()
-    eq(GamepadReticle.point.relativeTo, softPlate, "no target of yours: the controller's soft target")
-    eq(GamepadReticle.point[2], "BOTTOM"); eq(GamepadReticle.point[4], -12, "just below the nameplate")
-    set("aim", -30)
-    -- 30 px on a 1536 px tall screen: 15 of its 768 units, at the crosshair's scale 1.5: 10
-    near(GamepadReticle.point[4], -12 - 10, "the vertical offset: 30 px down from there")
-    eq(GamepadReticle.point.relativeTo, softPlate, "still on the nameplate")
-    set("aim", 0)
-    game.units.target = true; game.nameplates.target = targetPlate
-    game.fire("PLAYER_TARGET_CHANGED"); frame()
-    eq(GamepadReticle.point.relativeTo, targetPlate, "your target first")
-    game.fire("PLAYER_TARGET_CHANGED"); game.fire("NAME_PLATE_UNIT_ADDED", "nameplate3")
-    eq(#game.timers, 1, "several reasons in one frame: placed once, on the next frame")
-    frame()
-    game.nameplates.target = nil; game.nameplates.softenemy = nil
-    game.fire("NAME_PLATE_UNIT_REMOVED", "nameplate1"); frame()
-    eq(GamepadReticle.point.relativeTo, UIParent, "no nameplate left (off screen): back where the game aims")
-    game.nameplates.softenemy = softPlate
-    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate2"); frame()
-    eq(GamepadReticle.point.relativeTo, UIParent,
-        "a target without a nameplate (a friend, friendly plates off): never jumps to the soft target")
-    local friendPlate = { name = "friend's plate" }
-    game.nameplates.target = friendPlate
-    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate4"); frame()
-    eq(GamepadReticle.point.relativeTo, friendPlate, "with friendly plates on: on the friend")
-    near(GamepadReticle.point[3], 0)
-    eq(onUpdateFramesShown(), 0, "still nothing per frame: the game moves the nameplate, and the dot with it")
-end)
-
-test("the game's own Recenter (a resize) is followed by ours", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local targetPlate = {}
-    game.units.target = true; game.nameplates.target = targetPlate
-    GamepadReticle:Recenter()
-    eq(GamepadReticle.point.relativeTo, targetPlate, "put back on the target")
-end)
-
-test("crosshair off, GamepadCameraOffset off or keyboard: the game's crosshair is left alone", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    game.units.target = true; game.nameplates.target = {}
-    set("crosshair", false)
-    eq(GamepadReticle.point[3], 0, "recentered by the game's own code")
-    eq(GamepadReticle.point[4], 320)
-    game.fire("PLAYER_TARGET_CHANGED"); frame()
-    eq(GamepadReticle.point.relativeTo, nil, "and not put on the target")
-    set("crosshair", true)
-    set("enabled", false)
-    eq(GamepadReticle.point.relativeTo, nil, "off: the game's own place")
-
-    boot(false, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    game.units.target = true; game.nameplates.target = {}
-    game.fire("PLAYER_TARGET_CHANGED"); frame()
-    eq(GamepadReticle.point, nil, "keyboard: never touched")
-    eq(game.recenters, 0)
-end)
-
-test("the crosshair goes under the part of the nameplate you see: health bar, else the name", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local function part(visible) return { IsVisible = function() return visible end } end
-    local healthBar, name = part(true), part(true)
-    local plate = { UnitFrame = { healthBar = healthBar, name = name } }
-    game.units.target = true; game.nameplates.target = plate
-    game.fire("PLAYER_TARGET_CHANGED"); frame()
-    eq(GamepadReticle.point.relativeTo, healthBar, "under the health bar")
-    plate.UnitFrame.healthBar = part(false)
-    game.fire("NAME_PLATE_UNIT_ADDED", "nameplate1"); frame()
-    eq(GamepadReticle.point.relativeTo, name, "names only (a friendly player): under the name")
-end)
 
 test("no crosshair color here any more: the dot keeps its own, /gco color opens the settings, 1.0's saved color dropped", function()
     boot(true, { crosshairColor = "FF3030FF" })
@@ -419,8 +327,6 @@ test("no crosshair color here any more: the dot keeps its own, /gco color opens 
     eq(game.opened, 42, "/gco color: just the settings")
     eq(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
 end)
-
--- Nameplates for "Crosshair on your target"
 
 -- The popup (Popup.lua): shown or nil, its buttons' texts, and a click on one.
 local function popup() local frame = _G.GamepadCameraOffsetPopup; return frame and frame.shown and frame or nil end
@@ -435,109 +341,51 @@ local function clickPopup(text)
     local frame = _G.GamepadCameraOffsetPopup
     for _, button in ipairs(frame.buttons) do if button.shown and button.label == text then return button:Click() end end
 end
-local function nameplatesBox() local frame = popup(); return frame and frame.text.label:find("nameplate", 1, true) and frame or nil end
-local function nameplateValues()
-    return game.saved.nameplateShowEnemies .. game.saved.nameplateShowFriendlyPlayers .. game.saved.nameplateShowFriendlyClassColor
-end
 
-test("first launch: a box says which nameplate settings are off; Turn on turns those on; asked once", function()
-    boot(true, nil, false, { enemies = "1" })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local box = nameplatesBox()
-    eq(box and box.shown, true, "the box")
-    eq(box.text.label:find("• friendly player nameplates\n• class colors on friendly player nameplates", 1, true) ~= nil, true,
-        "names the two that are off: " .. box.text.label)
-    eq(box.text.label:find("enemy nameplates", 1, true), nil, "not the one already on")
-    eq(nameplateValues(), "100", "nothing changed before the click")
-    eq(popupButtons(), "No thanks, Turn on"); eq(box.Border.template, "DialogBorderTemplate", "the game's dialog border")
-    clickPopup("Turn on")
-    eq(nameplateValues(), "111", "turned on")
-    eq(box.shown, false, "closed")
-    eq(GamepadCameraOffsetDB.nameplatesAsked, true)
-    boot(true, GamepadCameraOffsetDB, false, { enemies = "1" })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(nameplatesBox(), nil, "the next launch doesn't ask again")
-end)
-
-test("on the controller: A turns the nameplates on, B says no; closing gives the buttons back", function()
+test("the reticle isn't moved here any more: the game's own place, whatever the target", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(game.bindings.PAD1, "GamepadCameraOffsetPopupButton1", "A: Turn on")
-    eq(game.bindings.PAD2, "GamepadCameraOffsetPopupButton2", "B: No thanks")
-    eq(popup().hint.label, "A: Turn on      B: No thanks", "no icons in this fake game: said in words")
-    _G[game.bindings.PAD1]:Click()
-    eq(nameplateValues(), "111", "turned on with A")
-    eq(game.bindings.PAD1, nil, "given back"); eq(game.bindings.PAD2, nil)
+    game.units.target = true; game.nameplates.target = {}
+    game.fire("PLAYER_TARGET_CHANGED"); frame()
+    eq(GamepadReticle.point, nil, "never touched")
+    eq(game.recenters, 0)
 end)
 
-test("No thanks changes nothing; the settings page's button asks again", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    clickPopup("No thanks")
-    eq(nameplateValues(), "000", "nothing changed")
-    eq(GamepadCameraOffsetDB.crosshair, true, "the crosshair setting kept")
-    local button
-    for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
-    eq(button.buttonText, "Turn on nameplates")
-    button.onClick()
-    eq(nameplatesBox().shown, true, "asked again")
-end)
-
-test("the Turn on nameplates row is built only when one of them is off; no function of ours for the game to call", function()
-    local function nameplatesRow()
-        for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then return initializer end end
-    end
-    boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
-    eq(nameplatesRow(), nil, "all on: no row")
-    boot(true, nil, false, { enemies = "1", friends = "0", classColors = "1" })
-    eq(nameplatesRow() ~= nil, true, "one off: the row")
-    eq(#nameplatesRow().shownPredicates, 0, "no shown predicate: it froze the controller's navigation")
-end)
-
-test("no box when the nameplates are on, or the crosshair setting is off", function()
-    boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(nameplatesBox(), nil, "all on")
-    boot(true, { crosshair = false })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(nameplatesBox(), nil, "crosshair setting off: not needed")
-end)
-
-test("first launch in a fight: the box waits for its end", function()
-    boot(true, nil)
-    game.combat = true
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(nameplatesBox(), nil, "not in combat")
-    eq(GamepadCameraOffsetDB.nameplatesAsked, true, "asked, after the fight")
-    game.combat = false
-    game.fire("PLAYER_REGEN_ENABLED")
-    eq(nameplatesBox().shown, true, "after the fight")
-end)
-
-test("if the game won't take the nameplate settings, Crosshair on your target goes off and says why", function()
-    boot(true, nil, false, { refuse = true })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    clickPopup("Turn on")
-    eq(nameplateValues(), "000")
-    eq(GamepadCameraOffsetDB.crosshair, false, "the setting that needs them, off")
-    eq(game.printed[#game.printed]:find("couldn't turn on", 1, true) ~= nil, true, game.printed[#game.printed])
-end)
-
-test("without Gamepad Crosshair Customizer: a button shows its link to copy; with it, no button", function()
+test("without Gamepad Reticle On Target: a button shows its link to copy; with it, no button", function()
     boot(true, nil)
     local button
-    for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Crosshair Customizer" then button = initializer end end
-    eq(button and button.buttonText, "Get Gamepad Crosshair Customizer")
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Reticle On Target" then button = initializer end end
+    eq(button and button.buttonText, "Get Gamepad Reticle On Target")
     button.onClick()
     local box = popup()
-    eq(box ~= nil, true, "the popup")
-    eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1818557", "its CurseForge page")
+    eq(box.editBox:GetText(), "https://github.com/ArtisanGW/GamepadReticleOnTarget")
     eq(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
     eq(popupButtons(), "Close, [secure] Reload", "a Reload for once it's installed")
     clickPopup("Close")
     eq(popup(), nil, "closed")
-    boot(true, nil, false, { customizerInstalled = true })
-    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Gamepad Crosshair Customizer", true, "installed: no button") end
+    boot(true, nil, false, { reticleAddonInstalled = true })
+    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Gamepad Reticle On Target", true, "installed: no button") end
+end)
+
+test("updating from 1.6: the old reticle settings dropped; had it on, told once where it went", function()
+    boot(true, { enabled = true, side = 30, crosshair = true, aim = -5, nameplatesAsked = true })
+    eq(GamepadCameraOffsetDB.crosshair, nil); eq(GamepadCameraOffsetDB.aim, nil); eq(GamepadCameraOffsetDB.nameplatesAsked, nil)
+    eq(GamepadCameraOffsetDB.side, 30, "the camera settings kept")
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local box = popup()
+    eq(box ~= nil and box.text.label:find("is now its own addon", 1, true) ~= nil, true, "said once")
+    eq(box.editBox:GetText(), "https://github.com/ArtisanGW/GamepadReticleOnTarget")
+    clickPopup("Close")
+    boot(true, GamepadCameraOffsetDB)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(popup(), nil, "not again")
+
+    boot(true, { crosshair = false, aim = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(popup(), nil, "had it off: nothing to say")
+    boot(true, { crosshair = true }, false, { reticleAddonInstalled = true })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(popup(), nil, "already installed: nothing to say")
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.
@@ -547,11 +395,11 @@ local function runUntilNoTimersLeft()
 end
 local function describeSavedSettings()
     local saved = GamepadCameraOffsetDB
-    return string.format("%s %s %s %s %s", tostring(saved.enabled), saved.side, saved.tilt, tostring(saved.crosshair), saved.aim)
+    return string.format("%s %s %s", tostring(saved.enabled), saved.side, saved.tilt)
 end
 
 test("/gco debug on a controller: every check passes, settings come back, findings saved", function()
-    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = -5 })
+    boot(true, { enabled = true, side = 30, tilt = 20 })
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     runUntilNoTimersLeft()
@@ -566,7 +414,7 @@ test("/gco debug on a controller: every check passes, settings come back, findin
     end
     eq(run.failed, 0); eq(run.skipped, 0); eq(run.passed > 20, true, "passed " .. run.passed)
     eq(run.environment.controllerUI, true); eq(run.environment.build, "70959"); eq(run.environment.settings.side, 30)
-    eq(describeSavedSettings(), "true 30 20 true -5", "your settings back")
+    eq(describeSavedSettings(), "true 30 20", "your settings back")
     eq(get("test_cameraOverShoulder"), "0.9", "and applied")
     eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
     local reloadBox = popup()
@@ -576,26 +424,7 @@ test("/gco debug on a controller: every check passes, settings come back, findin
     clickPopup("Later"); eq(popup(), nil, "Later hides it")
 end)
 
-test("/gco debug with a target: the crosshair on its nameplate is checked without measuring it (a restricted region)", function()
-    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = -5 })
-    game.units.target = true; game.nameplates.target = { restricted = true }
-    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
-    SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    runUntilNoTimersLeft()
-    local run = GamepadCameraOffsetDebugDB.runs[1]
-    local onNameplate = 0
-    for _, check in ipairs(run.checks) do
-        if check.result ~= "pass" then
-            error(check.result .. ": " .. check.name .. " expected " .. tostring(check.expected)
-                .. " got " .. tostring(check.actual) .. " " .. tostring(check.note))
-        end
-        if check.name:find("on the target's nameplate", 1, true) then onNameplate = onNameplate + 1 end
-    end
-    eq(run.failed, 0)
-    eq(onNameplate > 0, true, "the nameplate checks ran")
-end)
-
-test("/gco debug on keyboard: crosshair checks skipped, the rest pass", function()
+test("/gco debug on keyboard: the controller checks skipped, the rest pass", function()
     boot(false, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
@@ -608,8 +437,7 @@ test("/gco debug on keyboard: crosshair checks skipped, the rest pass", function
 end)
 
 test("/gco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
-    -- Nameplates on: no first-launch nameplate question in the way of the debug popup.
-    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 0 }, false,
+    boot(true, { enabled = true, side = 30, tilt = 20 }, false,
         { enemies = "1", friends = "1", classColors = "1" })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
@@ -617,7 +445,7 @@ test("/gco debug: a fight stops it, settings come back, the box waits for the fi
     game.combat = true
     game.fire("PLAYER_REGEN_DISABLED")
     eq(GamepadCameraOffsetDebugDB.runs[1].stopped, "combat")
-    eq(describeSavedSettings(), "true 30 20 true 0")
+    eq(describeSavedSettings(), "true 30 20")
     eq(popup(), nil, "no popup in combat")
     runUntilNoTimersLeft()
     eq(#GamepadCameraOffsetDebugDB.runs, 1, "nothing ran after the stop")
@@ -647,10 +475,10 @@ test("/gco debug: refused in combat; last and clear", function()
 end)
 
 test("a reload in the middle of a run: your settings are back at the next login", function()
-    boot(true, { enabled = true, side = -100, height = 0, crosshair = false, aim = 0 })
-    GamepadCameraOffsetDebugDB = { runs = {}, settingsToRestore = { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 3 } }
+    boot(true, { enabled = true, side = -100, height = 0 })
+    GamepadCameraOffsetDebugDB = { runs = {}, settingsToRestore = { enabled = true, side = 30, tilt = 20 } }
     game.fire("PLAYER_LOGIN")
-    eq(describeSavedSettings(), "true 30 20 true 3")
+    eq(describeSavedSettings(), "true 30 20")
     eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
 end)
 
@@ -668,7 +496,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,Nameplates.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()

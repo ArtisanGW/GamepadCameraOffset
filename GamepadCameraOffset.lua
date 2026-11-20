@@ -47,15 +47,10 @@ local Camera = {
     --   lookDown: 1 to 100, how much of the tilt stays when you look down at your
     --           character (the game's DownScale, 0 to 1). 0 is Default: the game's
     --           own DownScale (0.25).
-    --   aim:    the crosshair's vertical offset on a target: -200 (down) to 200 (up)
-    --           screen pixels from just below its nameplate. Pixels, not a percentage:
-    --           a nameplate keeps its size on screen at any distance, so a pixel
-    --           offset puts the dot at the same place on it.
-    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50, crosshair = true, aim = 0 },
+    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
-    AIM_MIN = -200, AIM_MAX = 200, AIM_STEP = 5,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
     -- tilts. Seen in game (DevCamOffset's tilt test, screenshots at 4, 15 and 39
@@ -66,14 +61,6 @@ local Camera = {
     TILT_PAD_AT_LIGHTEST = 0.75,
     TILT_PAD_AT_STRONGEST = 0.125,
 
-    -- The crosshair on a target: this far below its nameplate, in UI units.
-    CROSSHAIR_BELOW_NAMEPLATE = 12,
-    -- Whose nameplate the crosshair goes on: your target, friendly or not, or with
-    -- no target the controller's soft target (what it would attack). With a target
-    -- selected it never jumps to another unit: no nameplate for it (friendly ones
-    -- are off unless the game's friendly nameplates are on), and it stays where
-    -- the game aims.
-    CROSSHAIR_TARGET_UNITS = { "target", "softenemy" },
 }
 _G.GamepadCameraOffset = Camera
 
@@ -128,6 +115,11 @@ local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
     settings.crosshairColor = nil   -- 1.0's crosshair color: no longer part of this addon
+    -- 1.6's "Crosshair on your target" is its own addon since 1.7.0: Gamepad Reticle On Target.
+    if settings.crosshair ~= nil or settings.aim ~= nil then
+        if settings.crosshair then Camera.reticleMoved = true end   -- said once, at login (RelatedAddon.lua)
+        settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil
+    end
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
     end
@@ -196,14 +188,12 @@ function Camera.Apply()
     else
         setCVar(Camera.CVAR_DYNAMIC_PITCH, 0)
     end
-
-    Camera.WatchCrosshair()
 end
 
 -- Puts the game's own values back: its defaults for the camera CVars, and on
 -- the temp layer what the controller UI had there (nothing on keyboard).
 function Camera.Remove()
-    if not offsetsApplied then return Camera.WatchCrosshair() end
+    if not offsetsApplied then return end
     offsetsApplied = false
     if actionCameraOn then
         actionCameraOn = false
@@ -217,157 +207,6 @@ function Camera.Remove()
     for name, controllerValue in pairs(Camera.CONTROLLER_TEMPORARY_VALUES) do
         if isControllerUIOn() then setTemporaryCVar(name, controllerValue) else removeTemporaryCVar(name) end
     end
-    Camera.WatchCrosshair()
-end
-
--- The crosshair: the controller UI's GamepadReticle, a small dot Blizzard puts
--- at the screen's middle (x) and the engine's aim height (GetCursorCenterPosition):
--- where the controller's automatic targeting aims. It also holds the auto-attack
--- swing timer, so it stays. Blizzard places it once and again only on a resize
--- (GamepadReticleMixin:Recenter in Blizzard_Gamepad/UI/Reticle/GamepadReticle.lua).
---
--- With a target (yours, or else the controller's soft target), the dot goes just
--- below the target's nameplate: anchored to it, so the game moves it with the
--- target and nothing here runs per frame. It's placed again only when the target
--- changes or its nameplate comes or goes. With no target, or no nameplate (they're
--- off, or the target is off screen), it stays where the game aims. The crosshair
--- vertical offset setting moves it up or down from the nameplate. (Following the character instead, as
--- before, put the dot far from what you were attacking: seen in game.)
--- It's a plain frame, not a protected one, so it moves in combat too.
-
--- Secret values (hidden from addons in some situations) can't be used in math.
-local function readableOrNil(value)
-    if type(issecretvalue) == "function" and issecretvalue(value) then return nil end
-    return value
-end
-
-local crosshairPlacedOn   -- "nameplate", "screen", or nil while Blizzard placed it
-local crosshairPlacement  -- on a nameplate: { anchor = the part it's under, height = its offset }
-
-local function shouldMoveCrosshair()
-    local settings = getSettings()
-    return settings.enabled and settings.crosshair and isControllerUIOn() and type(GamepadReticle) == "table"
-end
-
--- The height the game aims at, in the crosshair frame's units.
-local function getAimHeight(crosshairFrame)
-    local scale = crosshairFrame:GetEffectiveScale()
-    if type(GetCursorCenterPosition) ~= "function" or not scale or scale <= 0 then return nil end
-    local _, aimY = GetCursorCenterPosition()
-    aimY = tonumber(readableOrNil(aimY))
-    return aimY and aimY / scale or nil
-end
-
--- Screen pixels as a frame's own units: the screen is 768 units tall at an
--- effective scale of 1, whatever its pixels (GetPhysicalScreenSize).
-Camera.SCREEN_HEIGHT_IN_UNITS = 768
-function Camera.PixelsToFrameUnits(frame, pixels)
-    local scale = frame:GetEffectiveScale()
-    if not scale or scale <= 0 then scale = 1 end
-    local physicalHeight
-    if type(GetPhysicalScreenSize) == "function" then
-        local _, height = GetPhysicalScreenSize()
-        physicalHeight = tonumber(readableOrNil(height))
-    end
-    if not physicalHeight or physicalHeight <= 0 then physicalHeight = Camera.SCREEN_HEIGHT_IN_UNITS end
-    return pixels * Camera.SCREEN_HEIGHT_IN_UNITS / physicalHeight / scale
-end
-
--- The part of a nameplate you see: its health bar, or with names only (friendly
--- players, as an option) its name, else the whole plate. The plate keeps its
--- full size either way, so its own bottom can sit well below a name.
-function Camera.VisibleNameplatePart(nameplate)
-    local unitFrame = nameplate.UnitFrame
-    if type(unitFrame) == "table" then
-        for _, part in ipairs({ unitFrame.healthBar, unitFrame.name }) do
-            if type(part) == "table" and type(part.IsVisible) == "function" and part:IsVisible() then return part end
-        end
-    end
-    return nameplate
-end
-
--- The crosshair's unit: the first of CROSSHAIR_TARGET_UNITS that exists. Then its
--- nameplate, if it has one, and the unit.
-function Camera.CrosshairTargetNameplate()
-    local namePlates = _G.C_NamePlate
-    if type(namePlates) ~= "table" or type(namePlates.GetNamePlateForUnit) ~= "function" then return nil end
-    if type(UnitExists) ~= "function" then return nil end
-    for _, unit in ipairs(Camera.CROSSHAIR_TARGET_UNITS) do
-        if UnitExists(unit) then
-            local succeeded, nameplate = pcall(namePlates.GetNamePlateForUnit, unit)
-            if succeeded and nameplate then return nameplate, unit end
-            return nil, unit
-        end
-    end
-    return nil
-end
-
-function Camera.PlaceCrosshair()
-    local crosshairFrame = _G.GamepadReticle
-    if not shouldMoveCrosshair() then
-        if crosshairPlacedOn and type(crosshairFrame) == "table" then
-            crosshairPlacedOn = nil
-            if type(crosshairFrame.Recenter) == "function" then crosshairFrame:Recenter() end
-        end
-        return
-    end
-    local nameplate = Camera.CrosshairTargetNameplate()
-    if nameplate then
-        local anchor = Camera.VisibleNameplatePart(nameplate)
-        local offsetPixels = clamp(getSettings().aim, Camera.AIM_MIN, Camera.AIM_MAX, 0)
-        local heightFromNameplate = -Camera.CROSSHAIR_BELOW_NAMEPLATE + Camera.PixelsToFrameUnits(crosshairFrame, offsetPixels)
-        crosshairFrame:ClearAllPoints()
-        crosshairFrame:SetPoint("CENTER", anchor, "BOTTOM", 0, heightFromNameplate)
-        crosshairPlacedOn = "nameplate"
-        crosshairPlacement = { anchor = anchor, height = heightFromNameplate }
-        return
-    end
-    local aimHeight = getAimHeight(crosshairFrame)
-    if not aimHeight then return end
-    crosshairFrame:ClearAllPoints()
-    crosshairFrame:SetPoint("CENTER", UIParent, "BOTTOM", 0, aimHeight)
-    crosshairPlacedOn = "screen"
-end
-Camera.CrosshairPlacedOn = function() return crosshairPlacedOn end
--- Where it was put on a nameplate: { anchor, height }. Asked here, not measured:
--- a frame anchored to a nameplate (a restricted region) can't be measured from
--- addon code (GetPoint fails: "Can't measure restricted regions", seen in game).
-Camera.CrosshairPlacement = function() return crosshairPlacedOn == "nameplate" and crosshairPlacement or nil end
-
--- Placed again on the next frame, once, however many reasons came in this frame
--- (a nameplate going away is still on its unit while its event runs).
-local crosshairPlaceQueued = false
-local function placeCrosshairNextFrame()
-    if crosshairPlaceQueued then return end
-    crosshairPlaceQueued = true
-    C_Timer.After(0, function()
-        crosshairPlaceQueued = false
-        Camera.PlaceCrosshair()
-    end)
-end
-
-local CROSSHAIR_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_SOFT_ENEMY_CHANGED", "NAME_PLATE_UNIT_ADDED",
-    "NAME_PLATE_UNIT_REMOVED" }
-local crosshairEventFrame = CreateFrame("Frame")
-crosshairEventFrame:SetScript("OnEvent", function() placeCrosshairNextFrame() end)
-
-local recenterHooked = false
-function Camera.WatchCrosshair()
-    local crosshairFrame = _G.GamepadReticle
-    local canHook = type(crosshairFrame) == "table" and type(crosshairFrame.Recenter) == "function"
-        and type(hooksecurefunc) == "function"
-    if not recenterHooked and canHook then
-        recenterHooked = true
-        -- Blizzard's own Recenter (a resize) puts it back in the middle: ours after it.
-        hooksecurefunc(crosshairFrame, "Recenter", function()
-            if shouldMoveCrosshair() then Camera.PlaceCrosshair() else crosshairPlacedOn = nil end
-        end)
-    end
-    for _, event in ipairs(CROSSHAIR_EVENTS) do
-        if shouldMoveCrosshair() then pcall(crosshairEventFrame.RegisterEvent, crosshairEventFrame, event)
-        else crosshairEventFrame:UnregisterEvent(event) end
-    end
-    Camera.PlaceCrosshair()
 end
 
 -- Apply on the next frame, once, however many reasons came in this frame.
@@ -386,18 +225,16 @@ Camera.GetSettings = getSettings
 Camera.GetCVar = getCVar
 Camera.GetCVarDefault = getCVarDefault
 Camera.IsControllerUIOn = isControllerUIOn
-Camera.GetAimHeight = getAimHeight
 
 -- Settings: Options > AddOns > Gamepad Camera Offset
 
 -- A slider's label: zero as a word ("Centered", "Default"), the rest as a whole
--- percentage with a direction ("40% right"), or in a unit when given ("20 px down").
-function Camera.Label(value, zeroWord, positiveWord, negativeWord, unit)
+-- percentage with a direction ("40% right").
+function Camera.Label(value, zeroWord, positiveWord, negativeWord)
     local number = tonumber(value) or 0
     local amount = math.floor(math.abs(number) + 0.5)
     if amount == 0 then return zeroWord end
     local direction = (number < 0 and negativeWord) or positiveWord
-    if unit then return string.format("%d %s %s", amount, unit, direction) end
     return string.format("%d%% %s", amount, direction)
 end
 
@@ -456,21 +293,6 @@ function Camera.RegisterSettings()
         .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Default", "kept") end))
-    addSetting("crosshair", Settings.VarType.Boolean, "Crosshair on your target",
-        "With the controller UI on, puts its aiming dot (and its auto-attack timer) just below "
-        .. "your target's nameplate, so it stays on what you attack as you both move.\n\n"
-        .. "• Your target first, else the controller's soft target\n"
-        .. "• No target, or nameplates off: where the game aims\n\n"
-        .. "What the controller targets is still decided by the game.")
-    addSetting("aim", Settings.VarType.Number, "Crosshair vertical offset",
-        "Moves the aiming dot up or down from just below your target's nameplate, in screen pixels, "
-        .. "e.g. down onto its body.\n\n"
-        .. "• Default: just below the nameplate\n"
-        .. "• No target: where the game aims",
-        sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
-            function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
-
-    if Camera.AddNameplatesButton then Camera.AddNameplatesButton(layout) end   -- Nameplates.lua
     if Camera.AddRelatedAddonButton then Camera.AddRelatedAddonButton(layout) end   -- RelatedAddon.lua
     Settings.RegisterAddOnCategory(category)
 end
@@ -506,8 +328,9 @@ eventFrame:SetScript("OnEvent", function(_, event, name)
     end
 end)
 
--- /gco opens the settings; /gco debug ... goes to the debug suite (Debug.lua).
+-- /gco (or /gamepadcameraoffset) opens the settings; /gco debug ... goes to the debug suite (Debug.lua).
 SLASH_GAMEPADCAMERAOFFSET1 = "/gco"
+SLASH_GAMEPADCAMERAOFFSET2 = "/gamepadcameraoffset"
 SlashCmdList.GAMEPADCAMERAOFFSET = function(message)
     local command, arguments = tostring(message or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
     if command == "debug" and Camera.Debug then return Camera.Debug.Command(arguments) end
