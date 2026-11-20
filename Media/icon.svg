@@ -13,6 +13,6 @@
     <!-- broad, square shoulders -->
     <rect x="0" y="364" width="292" height="148"/>
   </g>
-  <!-- the reticle: the game's white dot -->
+  <!-- the reticle: the game's white dot (half this radius, 17, in icon-400.png for CurseForge: full size looked like a moon there) -->
   <circle cx="380" cy="200" r="34" fill="#FFFFFF"/>
 </svg>
