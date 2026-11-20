@@ -153,8 +153,15 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.GetPhysicalScreenSize = function() return 2304, 1536 end
     game.buttons = {}
     _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip, addSearchTags, newTagID, gameDataFunc, gameDataEvent)
-        return { name = name, buttonText = buttonText, onClick = onClick, tooltip = tooltip,
-            gameDataFunc = gameDataFunc, gameDataEvent = gameDataEvent }
+        local initializer = { name = name, buttonText = buttonText, onClick = onClick, tooltip = tooltip,
+            gameDataFunc = gameDataFunc, gameDataEvent = gameDataEvent, modifyPredicates = {} }
+        function initializer:AddModifyPredicate(predicate) table.insert(self.modifyPredicates, predicate) end
+        -- As the game's EvaluateState: the button is enabled only if every modify predicate says so.
+        function initializer:ButtonEnabled()
+            for _, predicate in ipairs(self.modifyPredicates) do if not predicate() then return false end end
+            return true
+        end
+        return initializer
     end
     local function addInitializer(_, initializer) game.buttons[#game.buttons + 1] = initializer end
     _G.SettingsPanel = { GetLayout = function() return { AddInitializer = addInitializer } end }
@@ -480,6 +487,7 @@ test("the Turn on nameplates button is greyed out while they're all on, re-check
     boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
     local button
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
+    eq(button:ButtonEnabled(), false, "all on: greyed out when the row is built (a modify predicate)")
     eq(button.gameDataEvent, "CVAR_UPDATE")
     local fakeButton = { SetEnabled = function(self, enabled) self.enabled = enabled end }
     button.gameDataFunc(fakeButton)
@@ -487,6 +495,7 @@ test("the Turn on nameplates button is greyed out while they're all on, re-check
     C_CVar.SetCVar("nameplateShowFriendlyPlayers", "0")
     button.gameDataFunc(fakeButton)
     eq(fakeButton.enabled, true, "one off: clickable")
+    eq(button:ButtonEnabled(), true, "and when the row is built again")
 end)
 
 test("no box when the nameplates are on, or the crosshair setting is off", function()
