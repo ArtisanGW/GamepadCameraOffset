@@ -93,7 +93,6 @@ end
 -- The settings page's button (GamepadCameraOffset.lua calls this while building it).
 function Camera.AddNameplatesButton(layout)
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
-    local function somethingOff() return #Nameplates.Missing() > 0 end
     local initializer = CreateSettingsButtonInitializer("Nameplates", "Turn on nameplates",
         function()
             if not Nameplates.Ask() then print("|cff88ccffGamepad Camera Offset|r the nameplates it uses are already on.") end
@@ -102,15 +101,13 @@ function Camera.AddNameplatesButton(layout)
         .. "• Enemy nameplates\n"
         .. "• Friendly player nameplates\n"
         .. "• Class colors on friendly ones\n\n"
-        .. "Asks before turning on any that are off.", true,
-        nil,
-        -- While the page is open: re-checked on any CVar change.
-        function(button) button:SetEnabled(somethingOff()) end, "CVAR_UPDATE")
-    -- Greyed out while they're all on: the game checks a modify predicate whenever
-    -- it builds the row (EvaluateState, Blizzard_SettingControls.lua:1023-1031,
-    -- forever branch); gameDataFunc alone only runs on its event, so the button
-    -- first showed clickable (seen in game).
-    if type(initializer.AddModifyPredicate) == "function" then initializer:AddModifyPredicate(somethingOff) end
+        .. "Asks before turning on any that are off.", true)
+    -- Only shown while one of them is off: the game checks a shown predicate each
+    -- time it lays out the page (AddShownPredicate, Blizzard_Settings.lua:96,
+    -- forever branch).
+    if type(initializer.AddShownPredicate) == "function" then
+        initializer:AddShownPredicate(function() return #Nameplates.Missing() > 0 end)
+    end
     layout:AddInitializer(initializer)
 end
 
