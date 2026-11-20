@@ -14,6 +14,8 @@ local game
 -- refuse = true: the game won't take a change to them.
 local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     nameplateOptions = nameplateOptions or {}
+    _G.C_AddOns = { DoesAddOnExist = function(name) return nameplateOptions.customizerInstalled == true and name == "GamepadCrosshairCustomizer" end }
+    _G.GamepadCameraOffsetLinkBox = nil
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
@@ -43,10 +45,13 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.C_Timer = { After = function(_, fn) game.timers[#game.timers + 1] = fn end }
     local function newFakeRegion()
         local fakeRegion = {}
-        for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse" }) do
+        for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse",
+            "SetAutoFocus", "SetFocus" }) do
             fakeRegion[methodName] = function() end
         end
         function fakeRegion:SetText(text) self.label = text end
+        function fakeRegion:GetText() return self.label end
+        function fakeRegion:HighlightText() self.highlighted = true end
         function fakeRegion:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
         function fakeRegion:CreateTexture() return newFakeRegion() end
         function fakeRegion:CreateFontString() return newFakeRegion() end
@@ -153,6 +158,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Nameplates.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("RelatedAddon.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
@@ -453,6 +459,22 @@ test("if the game won't take the nameplate settings, Crosshair on your target go
     eq(game.printed[#game.printed]:find("couldn't turn on", 1, true) ~= nil, true, game.printed[#game.printed])
 end)
 
+test("without Gamepad Crosshair Customizer: a button shows its link to copy; with it, no button", function()
+    boot(true, nil)
+    local button
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Crosshair Customizer" then button = initializer end end
+    eq(button and button.buttonText, "Get Gamepad Crosshair Customizer...")
+    button.onClick()
+    local box = GamepadCameraOffsetLinkBox
+    eq(box.shown, true)
+    eq(box.editBox:GetText(), "https://github.com/ArtisanGW/GamepadCrosshairCustomizer")
+    eq(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
+    box.closeButton.click()
+    eq(box.shown, false)
+    boot(true, nil, false, { customizerInstalled = true })
+    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Gamepad Crosshair Customizer", true, "installed: no button") end
+end)
+
 -- /gco debug: the in-game suite, run here against the fake game.
 local function runUntilNoTimersLeft()
     for _ = 1, 200 do if #game.timers == 0 then return end; frame() end
@@ -578,7 +600,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Nameplates.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Nameplates.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()

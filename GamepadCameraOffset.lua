@@ -462,6 +462,7 @@ function Camera.RegisterSettings()
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 
     if Camera.AddNameplatesButton then Camera.AddNameplatesButton(layout) end   -- Nameplates.lua
+    if Camera.AddRelatedAddonButton then Camera.AddRelatedAddonButton(layout) end   -- RelatedAddon.lua
     Settings.RegisterAddOnCategory(category)
 end
 

@@ -24,6 +24,7 @@
         "MinimalSliderWithSteppersMixin",
         "InputUtil",
         "StaticPopup_Show",
-        "StaticPopup_Hide"
+        "StaticPopup_Hide",
+        "CLOSE"
     ]
 }
