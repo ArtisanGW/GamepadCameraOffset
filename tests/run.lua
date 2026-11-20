@@ -207,10 +207,14 @@ local function set(key, value)
 end
 local get = function(n) return C_CVar.GetCVar(n) end
 
-test("registers its page under Options > AddOns, with the defaults", function()
+-- Settings that move the camera (the defaults are the game's own, which change nothing).
+local function moved() return { enabled = true, side = 40, tilt = 50, lookDown = 50 } end
+
+test("registers its page under Options > AddOns, with the game's own values as defaults", function()
     boot(true, nil)
     eq(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
-    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 40); eq(GamepadCameraOffsetDB.tilt, 50)
+    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 0); eq(GamepadCameraOffsetDB.tilt, 0)
+    eq(GamepadCameraOffsetDB.lookDown, 0, "Default: the game's own")
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
     eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
     eq(game.options.aim, nil, "no reticle offset here any more")
@@ -220,8 +224,22 @@ test("registers its page under Options > AddOns, with the defaults", function()
     eq(game.opened, 42, "/gco opens it")
 end)
 
-test("on a controller, entering the world un-centers the camera and sets both offsets", function()
+test("with the defaults (the game's values), the game's camera is left alone: no ActionCam, still centered", function()
     boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(#game.consoleCommands, 0, "no ActionCam command")
+    eq(get("CameraKeepCharacterCentered"), "1", "the controller's own centering kept")
+    eq(get("test_cameraOverShoulder"), "0")
+    set("side", 20)
+    eq(get("CameraKeepCharacterCentered"), "0", "a slider moved: now it applies")
+    eq(table.concat(game.consoleCommands, ","), "ActionCam basic")
+    set("side", 0)
+    eq(get("CameraKeepCharacterCentered"), "1", "back at the game's values: the game's camera back")
+    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
+end)
+
+test("on a controller, entering the world un-centers the camera and sets both offsets", function()
+    boot(true, moved())
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     eq(get("CameraKeepCharacterCentered"), "0", "the temp value wins over the controller's")
     eq(game.saved.CameraKeepCharacterCentered, "1", "your saved setting untouched")
@@ -260,7 +278,7 @@ test("the game's experimental warning: its event dropped at load, the popup hidd
 end)
 
 test("tilt when looking down: the slider's percentage as the game's 0 to 1, labelled", function()
-    boot(false, nil)
+    boot(false, moved())
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     set("lookDown", 80)
     eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.8")
@@ -274,7 +292,7 @@ test("tilt when looking down: the slider's percentage as the game's 0 to 1, labe
 end)
 
 test("the game re-centering (a switch to the controller) is undone on the next frame, once", function()
-    boot(true, nil)
+    boot(true, moved())
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     C_CVar.SetTempCVar("CameraKeepCharacterCentered", "1")
     eq(#game.timers, 1, "one re-apply queued")
@@ -503,7 +521,7 @@ test("listed under Gamepad in the AddOns list, the game's own word", function()
 end)
 
 test("without Debug.lua (the release), the addon works and /gco debug opens the settings", function()
-    boot(true, {}, true)
+    boot(true, moved(), true)
     eq(GamepadCameraOffset.Debug, nil)
     game.fire("PLAYER_ENTERING_WORLD")
     frame()

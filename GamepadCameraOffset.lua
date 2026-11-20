@@ -45,7 +45,8 @@ local Camera = {
     --   lookDown: 1 to 100, how much of the tilt stays when you look down at your
     --           character (the game's DownScale, 0 to 1). 0 is Default: the game's
     --           own DownScale (0.25).
-    DEFAULTS = { enabled = true, side = 40, tilt = 50, lookDown = 50 },
+    -- Every slider starts at the game's own value: nothing changes until you move one.
+    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
@@ -151,9 +152,18 @@ local offsetsApplied = false
 -- Whether "ActionCam basic" ran since the addon last turned the camera on.
 local actionCameraOn = false
 
+-- Whether the settings ask for anything the game doesn't already do: a side
+-- offset or a tilt. (Tilt when looking down only matters with a tilt.)
+local function changesTheCamera(settings)
+    local sidePercent = clamp(settings.side, Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.DEFAULTS.side)
+    local tiltPercent = clamp(settings.tilt, Camera.TILT_MIN, Camera.TILT_MAX, Camera.DEFAULTS.tilt)
+    return sidePercent ~= 0 or tiltPercent > 0
+end
+
+-- Turned off, or with every slider at the game's value, the game's camera is left as it is.
 function Camera.Apply()
     local settings = getSettings()
-    if not settings.enabled then return Camera.Remove() end
+    if not (settings.enabled and changesTheCamera(settings)) then return Camera.Remove() end
     offsetsApplied = true
     if not actionCameraOn then
         actionCameraOn = true
