@@ -195,7 +195,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("RelatedAddon.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
@@ -506,7 +506,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
@@ -542,6 +542,17 @@ test("debug build: Gamepad Reticle On Target turned off counts as missing, to se
     eq(button(), nil, "the release: installed is installed")
     boot(true, nil, false, { reticleAddonInstalled = true })
     eq(button(), nil, "debug build, turned on: no button")
+end)
+
+test("a Get button for each missing sibling, in order, each with its own CurseForge link", function()
+    boot(true, nil)
+    local names = {}
+    for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.buttonText end end
+    eq(table.concat(names, ", "), "Get Gamepad Reticle On Target, Get Gamepad Reticle Customizer")
+    for _, initializer in ipairs(game.buttons) do
+        if initializer.name == "Gamepad Reticle Customizer" then initializer.onClick() end
+    end
+    eq(_G.GamepadCameraOffsetPopup.editBox:GetText(), "https://www.curseforge.com/projects/1818557")
 end)
 
 reportLine(passed .. " passed, " .. failed .. " failed")

@@ -15,8 +15,8 @@ Camera.Debug = Debug
 
 -- Debug builds only: the other addon turned off in the AddOns list counts as
 -- missing, so its "Get" button and popup show as players without it see them
--- (RelatedAddon.lua).
-if Camera.RelatedAddon then Camera.RelatedAddon.countTurnedOffAsMissing = true end
+-- (RelatedAddons.lua).
+if Camera.RelatedAddons then Camera.RelatedAddons.countTurnedOffAsMissing = true end
 
 local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown" }
 

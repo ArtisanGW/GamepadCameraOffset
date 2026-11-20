@@ -117,7 +117,7 @@ local function getSettings()
     settings.crosshairColor = nil   -- 1.0's crosshair color: no longer part of this addon
     -- 1.6's "Crosshair on your target" is its own addon since 1.7.0: Gamepad Reticle On Target.
     if settings.crosshair ~= nil or settings.aim ~= nil then
-        if settings.crosshair then Camera.reticleMoved = true end   -- said once, at login (RelatedAddon.lua)
+        if settings.crosshair then Camera.reticleMoved = true end   -- said once, at login (RelatedAddons.lua)
         settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil
     end
     for key, defaultValue in pairs(Camera.DEFAULTS) do
@@ -293,7 +293,7 @@ function Camera.RegisterSettings()
         .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Default", "kept") end))
-    if Camera.AddRelatedAddonButton then Camera.AddRelatedAddonButton(layout) end   -- RelatedAddon.lua
+    if Camera.AddRelatedAddonButtons then Camera.AddRelatedAddonButtons(layout) end   -- RelatedAddons.lua
     Settings.RegisterAddOnCategory(category)
 end
 
