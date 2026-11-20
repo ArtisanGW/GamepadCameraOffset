@@ -13,7 +13,7 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
-local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim", "crosshairColor" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "crosshair", "aim" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 

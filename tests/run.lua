@@ -128,39 +128,6 @@ local function boot(gamepad, saved, releaseBuild)
     end
     local function addInitializer(_, initializer) game.buttons[#game.buttons + 1] = initializer end
     _G.SettingsPanel = { GetLayout = function() return { AddInitializer = addInitializer } end }
-    -- The game's color picker: shown or not, its hooks, and its ColorSelect's HSV.
-    game.time = 100
-    _G.GetTime = function() return game.time end
-    game.picker = { hooks = {}, hsv = { 120, 1, 0.5 } }
-    _G.ColorPickerFrame = {
-        IsShown = function() return game.picker.shown == true end,
-        HookScript = function(_, script, fn) game.picker.hooks[script] = fn end,
-        Show = function() game.picker.shown = true; if game.picker.hooks.OnShow then game.picker.hooks.OnShow() end end,
-        Hide = function() game.picker.shown = false; if game.picker.hooks.OnHide then game.picker.hooks.OnHide() end end,
-        Content = {
-            ColorPicker = {
-                GetColorHSV = function() return game.picker.hsv[1], game.picker.hsv[2], game.picker.hsv[3] end,
-                SetColorHSV = function(_, h, s, v) game.picker.hsv = { h, s, v } end,
-                GetColorAlpha = function() return game.picker.alpha end,
-                SetColorAlpha = function(_, a) game.picker.alpha = a end,
-                SetWidth = function() end,
-                Alpha = { Show = function() game.picker.barShown = true end },
-                AlphaThumb = { Show = function() end },
-            },
-            AlphaBackground = { Show = function() end },
-        },
-        SetWidth = function() end,
-    }
-    game.cameraStickY, game.moveStickX, game.moveStickY = 0, 0, 0
-    game.padUp, game.padDown = false, false
-    _G.C_GamePad = {
-        GetDeviceMappedState = function()
-            return { stickCount = 2, sticks = { { x = game.moveStickX, y = game.moveStickY }, { x = 0, y = game.cameraStickY } },
-                buttonCount = 3, buttons = { false, game.padUp, game.padDown } }
-        end,
-        ButtonIndexToConfigName = function(index) return ({ [0] = "PAD1", [1] = "PADDUP", [2] = "PADDDOWN" })[index] end,
-        StickIndexToConfigName = function(index) return index == 0 and "Movement" or "Camera" end,
-    }
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
@@ -394,97 +361,16 @@ test("the crosshair goes under the part of the nameplate you see: health bar, el
     eq(GamepadReticle.point.relativeTo, name, "names only (a friendly player): under the name")
 end)
 
-test("controller: while the color picker is open for the crosshair color, the left stick moves on the wheel, the right sets brightness", function()
-    boot(true, nil)
+test("no crosshair color here any more: the dot keeps its own, /gco color opens the settings, 1.0's saved color dropped", function()
+    boot(true, { crosshairColor = "FF3030FF" })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local driver = GamepadCameraOffset.brightnessDriver
-    local function step(seconds) driver.update(driver, seconds) end
-    ColorPickerFrame:Show()
-    eq(driver.shown, false, "a picker opened by something else (the chat settings): left to the game")
-    ColorPickerFrame:Hide()
-    game.swatch.getValue()   -- the swatch reads the color as it opens the picker
-    game.time = game.time + 0.1
-    SlashCmdList.GAMEPADCAMERAOFFSET("color FFFFFF80")
-    ColorPickerFrame:Show()
-    eq(driver.shown, true, "opened for the crosshair color: the right stick drives the brightness")
-    eq(ColorPickerFrame.hasOpacity, true, "the opacity bar put on the picker")
-    eq(game.picker.barShown, true)
-    near(game.picker.alpha, 128 / 255, "at the crosshair's opacity")
-    game.padUp = true; step(0.5)
-    near(game.picker.alpha, 128 / 255 + 0.25, "D-pad up: more solid (0.5 a second)")
-    eq(GamepadCameraOffsetDB.crosshairColor:sub(7, 8), string.format("%02X", math.floor((128 / 255 + 0.25) * 255 + 0.5)),
-        "and the crosshair with it")
-    game.padUp, game.padDown = false, true; step(10)
-    near(game.picker.alpha, 0, "D-pad down: see-through, not past 0")
-    game.padDown = false
-    ColorPickerFrame.opacityFunc()   -- the mouse on the bar: the picker's own callback
-    eq(GamepadCameraOffsetDB.crosshairColor:sub(7, 8), "00")
-    game.cameraStickY = 1; step(0.5)
-    near(game.picker.hsv[3], 0.8, "stick up: brighter (0.6 a second)")
-    eq(game.picker.hsv[1], 120, "the hue kept")
-    game.cameraStickY = -1; step(5)
-    near(game.picker.hsv[3], 0, "stick down: darker, not past black")
-    game.cameraStickY = 0.1; step(1)
-    near(game.picker.hsv[3], 0, "inside the dead zone: nothing")
-    game.cameraStickY = 0
-
-    -- The left stick: the point on the wheel. Hue 0 sits at the point (-1, 0).
-    game.picker.hsv = { 0, 0, 1 }   -- the middle: white
-    game.moveStickX = -1; step(0.5)
-    near(game.picker.hsv[2], 0.4, "left: out from the middle, saturation 0.4 (0.8 a second)")
-    near(game.picker.hsv[1], 0, "toward hue 0")
-    game.moveStickX, game.moveStickY = 0, -1; step(0.5)
-    local x, y = GamepadCameraOffset.WheelPoint(game.picker.hsv[1], game.picker.hsv[2])
-    near(x, -0.4, "down: the point moves down"); near(y, -0.4)
-    game.moveStickX, game.moveStickY = -1, 0; step(10)
-    near(game.picker.hsv[2], 1, "never past the wheel's edge")
-    near(game.picker.hsv[3], 1, "the brightness kept")
-    game.moveStickX, game.moveStickY = 0.1, 0.1; local before = game.picker.hsv[1]; step(1)
-    eq(game.picker.hsv[1], before, "inside the dead zone: nothing")
-    game.moveStickX, game.moveStickY = 0, 0
-    ColorPickerFrame:Hide()
-    eq(driver.shown, false, "picker shut: nothing runs")
-end)
-
-local function dotColor()
+    eq(GamepadCameraOffsetDB.crosshairColor, nil, "1.0's saved color dropped")
     local color = GamepadReticle.Icons.StandardIcon.color
-    return string.format("%.2f %.2f %.2f %.2f", color[1], color[2], color[3], color[4])
-end
-
-test("the crosshair's color: 32 bits RRGGBBAA, from /gco color or the settings swatch and an opacity slider, white when off", function()
-    boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(GamepadCameraOffsetDB.crosshairColor, "FFFFFFFF", "white by default")
-    eq(dotColor(), "1.00 1.00 1.00 1.00")
-    SlashCmdList.GAMEPADCAMERAOFFSET("color FF3030CC")
-    eq(GamepadCameraOffsetDB.crosshairColor, "FF3030CC")
-    eq(dotColor(), "1.00 0.19 0.19 0.80", "tinted at once")
-    SlashCmdList.GAMEPADCAMERAOFFSET("color nonsense")
-    eq(GamepadCameraOffsetDB.crosshairColor, "FF3030CC", "a wrong color changes nothing")
-    eq(game.printed[#game.printed]:find("usage", 1, true) ~= nil, true, "and says how")
-    SlashCmdList.GAMEPADCAMERAOFFSET("color #00ff00")
-    eq(GamepadCameraOffsetDB.crosshairColor, "00FF00FF", "six digits: opaque")
-
-    eq(#game.buttons, 0, "no button of ours opening the color picker (its controller bindings went on tainted)")
-    local swatch, opacity = game.swatch, game.settings.GamepadCameraOffset_crosshairOpacity
-    eq(swatch.label, "Crosshair color", "the settings page's own color swatch, which opens the picker itself")
-    eq(swatch.getValue(), "FF00FF00", "the swatch's AARRGGBB: alpha FF, the color")
-    swatch.setValue("ff0000ff")
-    eq(GamepadCameraOffsetDB.crosshairColor, "0000FFFF", "the picked color, the opacity kept")
-    swatch.setValue("nonsense")
-    eq(GamepadCameraOffsetDB.crosshairColor, "0000FFFF", "a wrong value changes nothing")
-    eq(opacity, nil, "no separate opacity slider: it's on the picker")
-    GamepadCameraOffset.SetCrosshairOpacity(40)
-    eq(GamepadCameraOffsetDB.crosshairColor, "0000FF66", "40% opacity")
-    eq(dotColor(), "0.00 0.00 1.00 0.40", "tinted at once")
-    swatch.setValue("ffff8000")
-    eq(GamepadCameraOffsetDB.crosshairColor, "FF800066", "a new color keeps the opacity")
-    SlashCmdList.GAMEPADCAMERAOFFSET("color 00FF00FF")
-
-    set("crosshair", false)
-    eq(dotColor(), "1.00 1.00 1.00 1.00", "crosshair setting off: the game's own white")
-    set("crosshair", true)
-    eq(dotColor(), "0.00 1.00 0.00 1.00", "and back")
+    eq(table.concat(color, " "), "1 1 1 1", "the dot's color untouched")
+    eq(game.swatch, nil, "no color swatch on the page")
+    SlashCmdList.GAMEPADCAMERAOFFSET("color FF3030FF")
+    eq(game.opened, 42, "/gco color: just the settings")
+    eq(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.
