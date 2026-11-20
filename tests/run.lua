@@ -54,6 +54,9 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         function fakeRegion:GetStringHeight() return 30 end
         function fakeRegion:SetShown(shown) self.shown = shown and true or false end
         function fakeRegion:IsShown() return self.shown == true end
+        function fakeRegion:SetAtlas(atlas) self.atlas = atlas end
+        function fakeRegion:Show() self.shown = true end
+        function fakeRegion:Hide() self.shown = false end
         function fakeRegion:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
         function fakeRegion:CreateTexture() return newFakeRegion() end
         function fakeRegion:CreateFontString() return newFakeRegion() end
@@ -453,7 +456,7 @@ test("on the controller: A turns the nameplates on, B says no; closing gives the
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     eq(game.bindings.PAD1, "GamepadCameraOffsetPopupButton1", "A: Turn on")
     eq(game.bindings.PAD2, "GamepadCameraOffsetPopupButton2", "B: No thanks")
-    eq(popup().hint.label, "A: Turn on      B: No thanks")
+    eq(popup().hint.label, "A: Turn on      B: No thanks", "no icons in this fake game: said in words")
     _G[game.bindings.PAD1]:Click()
     eq(nameplateValues(), "111", "turned on with A")
     eq(game.bindings.PAD1, nil, "given back"); eq(game.bindings.PAD2, nil)
