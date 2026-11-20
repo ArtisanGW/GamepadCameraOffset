@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## SavedVariables: GamepadCameraOffsetDB, GamepadCameraOffsetDebugDB
 ## Category: Gamepad
+## IconTexture: Interface\AddOns\GamepadCameraOffset\Media\icon-64.png
 
 GamepadCameraOffset.lua
 Popup.lua

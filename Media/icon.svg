@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Gamepad Camera Offset: your character's head and shoulders off to the side, the game's white dot ahead. -->
+  <rect x="0" y="0" width="512" height="512" fill="#15202E"/>
+  <!-- the character, seen from behind: head and square shoulders, lower left -->
+  <circle cx="140" cy="300" r="62" fill="#5BE0C8"/>
+  <rect x="28" y="384" width="224" height="128" fill="#5BE0C8"/>
+  <!-- the reticle: the game's white dot -->
+  <circle cx="360" cy="216" r="34" fill="#FFFFFF"/>
+</svg>
