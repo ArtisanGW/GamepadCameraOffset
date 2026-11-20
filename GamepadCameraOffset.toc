@@ -4,7 +4,7 @@
 ## Author: Artisan
 ## Version: @project-version@
 ## SavedVariables: GamepadCameraOffsetDB, GamepadCameraOffsetDebugDB
-## Category: Camera
+## Category: Gamepad
 
 GamepadCameraOffset.lua
 #@do-not-package@

@@ -501,6 +501,11 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua", "the release .toc loads only the addon")
 end)
 
+test("listed under Gamepad in the AddOns list, the game's own word", function()
+    local file = assert(io.open("GamepadCameraOffset.toc")); local toc = file:read("*a"); file:close()
+    eq(toc:match("## Category: ([^\r\n]+)"), "Gamepad")
+end)
+
 test("without Debug.lua (the release), the addon works and /gco debug opens the settings", function()
     boot(true, {}, true)
     eq(GamepadCameraOffset.Debug, nil)
