@@ -440,7 +440,9 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
     addSetting("tilt", Settings.VarType.Number, "Tilt",
-        "Tilts the camera up: your character sits lower on the screen and you see more ahead.\n\n"
+        "Tilts the camera up, so:\n"
+        .. "• Your character sits lower on the screen\n"
+        .. "• You see more ahead\n\n"
         .. "• Off: the game's own view\n"
         .. "• 100%: the strongest tilt\n\n"
         .. "The further you zoom out, the stronger it is; close up it barely shows.",

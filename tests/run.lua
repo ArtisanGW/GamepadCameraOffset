@@ -45,7 +45,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local function newFakeRegion()
         local fakeRegion = {}
         for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse",
-            "SetAutoFocus", "SetFocus", "SetToplevel", "SetHeight", "ClearAllPoints" }) do
+            "SetAutoFocus", "SetFocus", "SetToplevel", "SetHeight", "ClearAllPoints", "SetJustifyH" }) do
             fakeRegion[methodName] = function() end
         end
         function fakeRegion:SetText(text) self.label = text end

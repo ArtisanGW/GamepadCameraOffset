@@ -24,7 +24,10 @@ end
 -- Its link to copy, and a Reload for once it's installed (Popup.lua).
 function RelatedAddon.ShowLink()
     Camera.Popup.Show({
-        text = RelatedAddon.TITLE .. ": copy the link (Ctrl+C), install it, then reload.",
+        text = "To get " .. RelatedAddon.TITLE .. ":\n"
+            .. "• Copy the link (Ctrl+C)\n"
+            .. "• Install it\n"
+            .. "• Reload",
         copyText = RelatedAddon.LINK,
         buttons = { { text = "Reload", reload = true }, { text = "Close" } },
     })
