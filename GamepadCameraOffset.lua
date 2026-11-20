@@ -225,7 +225,7 @@ function Camera.ApplyNextFrame()
     end)
 end
 
--- For Debug.lua (/gco debug), which checks what these actually did.
+-- Read by other files of this addon.
 Camera.GetSettings = getSettings
 Camera.GetCVar = getCVar
 Camera.GetCVarDefault = getCVarDefault
@@ -333,7 +333,7 @@ eventFrame:SetScript("OnEvent", function(_, event, name)
     end
 end)
 
--- /gco (or /gamepadcameraoffset) opens the settings; /gco debug ... goes to the debug suite (Debug.lua).
+-- /gco (or /gamepadcameraoffset) opens the settings.
 SLASH_GAMEPADCAMERAOFFSET1 = "/gco"
 SLASH_GAMEPADCAMERAOFFSET2 = "/gamepadcameraoffset"
 SlashCmdList.GAMEPADCAMERAOFFSET = function(message)

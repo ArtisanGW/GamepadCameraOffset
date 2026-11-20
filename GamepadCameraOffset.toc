@@ -11,6 +11,6 @@ GamepadCameraOffset.lua
 Popup.lua
 RelatedAddons.lua
 #@do-not-package@
-# /gco debug, the in-game test suite: not in the release zip (.pkgmeta)
+# Development builds only: left out of the release (.pkgmeta)
 Debug.lua
 #@end-do-not-package@
