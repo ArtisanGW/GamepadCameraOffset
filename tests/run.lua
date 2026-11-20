@@ -364,8 +364,8 @@ end)
 test("without Gamepad Reticle On Target: a button shows its link to copy; with it, no button", function()
     boot(true, nil)
     local button
-    for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Reticle On Target" then button = initializer end end
-    eq(button and button.buttonText, "Get Gamepad Reticle On Target")
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Reticle on your target" then button = initializer end end
+    eq(button and button.buttonText, "Get the addon")
     button.onClick()
     local box = popup()
     eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1819101")
@@ -374,7 +374,7 @@ test("without Gamepad Reticle On Target: a button shows its link to copy; with i
     clickPopup("Close")
     eq(popup(), nil, "closed")
     boot(true, nil, false, { reticleAddonInstalled = true })
-    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Gamepad Reticle On Target", true, "installed: no button") end
+    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Reticle on your target", true, "installed: no button") end
 end)
 
 test("updating from 1.6: the old reticle settings dropped; had it on, told once where it went", function()
@@ -534,7 +534,7 @@ end)
 
 test("debug build: Gamepad Reticle On Target turned off counts as missing, to see its button; the release doesn't", function()
     local function button()
-        for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Reticle On Target" then return initializer end end
+        for _, initializer in ipairs(game.buttons) do if initializer.name == "Reticle on your target" then return initializer end end
     end
     boot(true, nil, false, { reticleAddonOff = true })
     eq(button() ~= nil, true, "turned off for this character: the button, as players without it see it")
@@ -547,10 +547,10 @@ end)
 test("a Get button for each missing sibling, in order, each with its own CurseForge link", function()
     boot(true, nil)
     local names = {}
-    for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.buttonText end end
-    eq(table.concat(names, ", "), "Get Gamepad Reticle On Target, Get Gamepad Reticle Customizer")
+    for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.name .. ": " .. initializer.buttonText end end
+    eq(table.concat(names, ", "), "Reticle on your target: Get the addon, Customize the reticle: Get the addon")
     for _, initializer in ipairs(game.buttons) do
-        if initializer.name == "Gamepad Reticle Customizer" then initializer.onClick() end
+        if initializer.name == "Customize the reticle" then initializer.onClick() end
     end
     eq(_G.GamepadCameraOffsetPopup.editBox:GetText(), "https://www.curseforge.com/projects/1818557")
 end)

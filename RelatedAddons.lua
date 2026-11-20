@@ -8,25 +8,28 @@
 local Camera = _G.GamepadCameraOffset
 
 local RelatedAddons = {
-    -- Each: its folder name, its title, its CurseForge page (the project's
-    -- permanent short address, which redirects to it) and its button's tooltip.
+    -- Each: its folder name, its title, its settings row's label, its CurseForge
+    -- page (the project's permanent short address, which redirects to it) and
+    -- the row's tooltip.
     SIBLINGS = {
         {
             NAME = "GamepadReticleOnTarget",
             TITLE = "Gamepad Reticle On Target",
+            LABEL = "Reticle on your target",   -- the settings row: what it does
             LINK = "https://www.curseforge.com/projects/1819101",
             TOOLTIP = "Puts the controller's reticle just below your target's nameplate.\n\n"
             .. "It was \"Crosshair on your target\" here before 1.7.0.\n\n"
-            .. "A separate addon; this one works without it.",
+            .. "A separate addon, Gamepad Reticle On Target; this one works without it.",
         },
         {
             NAME = "GamepadReticleCustomizer",
             TITLE = "Gamepad Reticle Customizer",
+            LABEL = "Customize the reticle",   -- the settings row: what it does
             LINK = "https://www.curseforge.com/projects/1818557",
             TOOLTIP = "Customizes the reticle:\n\n"
             .. "• Its shape, size, color and border\n"
             .. "• An icon on your target: its class, a raid marker\n\n"
-            .. "A separate addon; this one works without it.",
+            .. "A separate addon, Gamepad Reticle Customizer; this one works without it.",
         },
     },
 }
@@ -95,7 +98,7 @@ end
 function Camera.AddRelatedAddonButtons(layout)
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
     for _, sibling in ipairs(RelatedAddons.Missing()) do
-        layout:AddInitializer(CreateSettingsButtonInitializer(sibling.TITLE, "Get " .. sibling.TITLE,
+        layout:AddInitializer(CreateSettingsButtonInitializer(sibling.LABEL, "Get the addon",
             function() RelatedAddons.ShowLink(sibling) end, sibling.TOOLTIP, true))
     end
 end
