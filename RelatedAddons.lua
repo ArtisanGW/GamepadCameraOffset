@@ -16,7 +16,7 @@ local RelatedAddons = {
             LABEL = "Reticle on your target",   -- the settings row: what it does
             LINK = "https://www.curseforge.com/projects/1819101",
             TOOLTIP = "Puts the controller's reticle just below your target's nameplate.\n\n"
-            .. "A separate addon, Gamepad Reticle On Target; this one works without it.",
+            .. "A separate addon; this one works without it.",
         },
         {
             NAME = "GamepadReticleCustomizer",
@@ -26,7 +26,7 @@ local RelatedAddons = {
             TOOLTIP = "Customizes the reticle:\n\n"
             .. "• Its shape, size, color and border\n"
             .. "• An icon on your target: its class, a raid marker\n\n"
-            .. "A separate addon, Gamepad Reticle Customizer; this one works without it.",
+            .. "A separate addon; this one works without it.",
         },
     },
 }

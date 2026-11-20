@@ -6,23 +6,21 @@
 -- CameraKeepCharacterCentered = 1 on the game's TEMP CVar layer. A temp value
 -- wins over the saved one, so SetCVar(..., 0) is written but never used, and a
 -- centered camera ignores the offsets. Setting our own temp value of 0 wins
--- instead (checked in game with the DevCamOffset tool). The game sets its own
+-- instead. The game sets its own
 -- again on every reload and every switch to the controller, so this re-applies
 -- whenever it sees CameraKeepCharacterCentered go back to 1.
 --
 -- The test_camera* CVars are the game's experimental camera: it clears them on
 -- every reload (they're applied again at login). Before using them, the addon
 -- turns on the game's ActionCam with the console command "ActionCam basic"
--- (once per session; the Only Cams addon does the same and says the CVars do
--- nothing until then; "basic", not "full", which drags the camera toward
--- targets). Turning GamepadCameraOffset off runs "ActionCam off".
+-- (once per session: the CVars do nothing until then; "basic", not "full",
+-- which drags the camera toward targets). Turning GamepadCameraOffset off runs "ActionCam off".
 --
 -- The first change to one of them in a session makes the game show its
 -- "experimental feature" warning (Blizzard_Game/Shared/EventImplementation.lua,
 -- HandleExperimentalCVarConfirmationNeeded). Its Disable button clears them
 -- all, so the addon stops the game listening for that event with
--- GameEvent.UnregisterInternalEvent, the game's own way to drop an event (as
--- SteadyCam does), and hides the warning if it shows up some other way.
+-- GameEvent.UnregisterInternalEvent, the game's own way to drop an event, and hides the warning if it shows up some other way.
 local ADDON_NAME = ...
 
 local Camera = {
@@ -53,8 +51,7 @@ local Camera = {
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
-    -- tilts. Seen in game (DevCamOffset's tilt test, screenshots at 4, 15 and 39
-    -- yd, 2026-11-19): 0.125 is the strongest usable tilt, by about 0.75 there's
+    -- tilts: 0.125 is the strongest usable tilt, by about 0.75 there's
     -- little left, and pad 0 is no tilt at all (so it's never sent). The tilt
     -- grows with the zoom: at 4 yd it barely shows, at 39 yd it's strongest.
     -- So 1% starts at 0.75 and 100% ends at 0.125.
@@ -114,7 +111,7 @@ end
 local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
-    -- Settings this addon no longer has, left by earlier versions: dropped.
+    -- Settings this addon doesn't use: dropped.
     settings.crosshairColor, settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil, nil
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
