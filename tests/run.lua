@@ -9,7 +9,8 @@ end
 local function eq(a, b, msg) if a ~= b then error((msg or "") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
 
 local game
-local function boot(gamepad, saved)
+-- releaseBuild: as in the release zip, without Debug.lua (see .pkgmeta).
+local function boot(gamepad, saved, releaseBuild)
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
@@ -172,7 +173,7 @@ local function boot(gamepad, saved)
     _G.print = function(t) printed[#printed + 1] = t end
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns)
+    if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
 local function frame() local t = game.timers; game.timers = {}; for _, fn in ipairs(t) do fn() end end
@@ -595,6 +596,32 @@ test("a reload in the middle of a run: your settings are back at the next login"
     game.fire("PLAYER_LOGIN")
     eq(describeSavedSettings(), "true 30 20 true 3")
     eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
+end)
+
+-- The release zip (BigWigs packager, .github/workflows/release.yml) leaves the
+-- debug suite out: .pkgmeta ignores the file, and its .toc line sits in a
+-- do-not-package block, which the packager deletes.
+test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the release .toc", function()
+    local function readFile(path) local file = assert(io.open(path)); local text = file:read("*a"); file:close(); return text end
+    local packageRules = readFile(".pkgmeta")
+    assert(packageRules:find("\n  %- Debug%.lua"), ".pkgmeta ignores Debug.lua")
+    local releaseToc = readFile("GamepadCameraOffset.toc"):gsub("\r", "")
+        :gsub("#@do%-not%-package@.-#@end%-do%-not%-package@\n?", "")   -- what the packager does
+    local loadedFiles = {}
+    for line in releaseToc:gmatch("[^\n]+") do
+        if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
+    end
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua", "the release .toc loads only the addon")
+end)
+
+test("without Debug.lua (the release), the addon works and /gco debug opens the settings", function()
+    boot(true, {}, true)
+    eq(GamepadCameraOffset.Debug, nil)
+    game.fire("PLAYER_ENTERING_WORLD")
+    frame()
+    eq(C_CVar.GetCVar("CameraKeepCharacterCentered"), "0", "the camera offset still applies")
+    SlashCmdList.GAMEPADCAMERAOFFSET("debug")
+    eq(game.opened, 42, "/gco debug opens the settings page")
 end)
 
 reportLine(passed .. " passed, " .. failed .. " failed")

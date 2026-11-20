@@ -4,3 +4,4 @@ package-as: GamepadCameraOffset
 
 ignore:
   - tests
+  - Debug.lua   # /gco debug; its .toc line is in a do-not-package block
