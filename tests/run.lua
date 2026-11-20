@@ -467,7 +467,7 @@ test("without Gamepad Crosshair Customizer: a button shows its link to copy; wit
     button.onClick()
     local box = GamepadCameraOffsetLinkBox
     eq(box.shown, true)
-    eq(box.editBox:GetText(), "https://github.com/ArtisanGW/GamepadCrosshairCustomizer")
+    eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1818557", "its CurseForge page")
     eq(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
     box.closeButton.click()
     eq(box.shown, false)

@@ -8,8 +8,8 @@ local Camera = _G.GamepadCameraOffset
 local RelatedAddon = {
     NAME = "GamepadCrosshairCustomizer",
     TITLE = "Gamepad Crosshair Customizer",
-    -- Its CurseForge page once it has a project (curseforge.com/projects/<id>); GitHub until then.
-    LINK = "https://github.com/ArtisanGW/GamepadCrosshairCustomizer",
+    -- CurseForge's permanent short address for its project (redirects to its page).
+    LINK = "https://www.curseforge.com/projects/1818557",
 }
 Camera.RelatedAddon = RelatedAddon
 
