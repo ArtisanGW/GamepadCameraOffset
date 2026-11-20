@@ -1,9 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Gamepad Camera Offset: your character's head and shoulders off to the side, the game's white dot ahead. -->
+  <!-- Gamepad Camera Offset: a tauren seen from behind, off to the side; the game's white dot ahead. -->
   <rect x="0" y="0" width="512" height="512" fill="#15202E"/>
-  <!-- the character, seen from behind: head and square shoulders, lower left -->
-  <circle cx="140" cy="300" r="62" fill="#5BE0C8"/>
-  <rect x="28" y="384" width="224" height="128" fill="#5BE0C8"/>
+  <g fill="#5BE0C8">
+    <!-- horns, curving out and up -->
+    <path d="M 120 296 Q 40 290 34 196 Q 62 250 130 256 Z"/>
+    <path d="M 172 296 Q 252 290 258 196 Q 230 250 162 256 Z"/>
+    <!-- ears, sticking out sideways -->
+    <path d="M 92 300 L 58 288 L 64 310 Z"/>
+    <path d="M 200 300 L 234 288 L 228 310 Z"/>
+    <!-- head, big and low -->
+    <circle cx="146" cy="304" r="58"/>
+    <!-- broad, square shoulders -->
+    <rect x="0" y="364" width="292" height="148"/>
+  </g>
   <!-- the reticle: the game's white dot -->
-  <circle cx="360" cy="216" r="34" fill="#FFFFFF"/>
+  <circle cx="380" cy="200" r="34" fill="#FFFFFF"/>
 </svg>
