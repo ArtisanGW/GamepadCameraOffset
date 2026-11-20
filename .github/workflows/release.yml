@@ -61,3 +61,6 @@ jobs:
         with:
           name: GamepadCameraOffset
           path: .release/*.zip
+          # The packager's folder starts with a dot, which upload-artifact skips unless told.
+          include-hidden-files: true
+          if-no-files-found: error
