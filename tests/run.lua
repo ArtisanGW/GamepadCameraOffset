@@ -69,10 +69,16 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
             if scriptType == "OnUpdate" then self.update = handler
             elseif scriptType == "OnClick" then self.click = handler
             elseif scriptType == "PreClick" then self.preClick = handler
+            elseif scriptType == "OnHide" then self.onHide = handler
             else self.script = handler end
         end
         function fakeFrame:Show() self.shown = true end
-        function fakeFrame:Hide() self.shown = false end
+        function fakeFrame:Hide()
+            local wasShown = self.shown
+            self.shown = false
+            if wasShown and self.onHide then self.onHide(self) end
+        end
+        function fakeFrame:GetName() return self.name end
         function fakeFrame:Click() if self.click then self.click(self) end end
         game.frames[#game.frames + 1] = fakeFrame
         return fakeFrame
@@ -151,6 +157,13 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.C_NamePlate = { GetNamePlateForUnit = function(unit) return game.nameplates[unit] end }
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
+    game.bindings, game.bindingOwners = {}, {}
+    _G.SetOverrideBindingClick = function(owner, _, key, buttonName) game.bindings[key] = buttonName; game.bindingOwners[key] = owner end
+    _G.ClearOverrideBindings = function(owner)
+        for key, keyOwner in pairs(game.bindingOwners) do
+            if keyOwner == owner then game.bindings[key], game.bindingOwners[key] = nil, nil end
+        end
+    end
     _G.GetBuildInfo = function() return "1.60.1", "70959", "", 16001 end
     _G.GamepadCameraOffsetDB = saved
     _G.GamepadCameraOffsetDebugDB = nil
@@ -433,6 +446,17 @@ test("first launch: a box says which nameplate settings are off; Turn on turns t
     boot(true, GamepadCameraOffsetDB, false, { enemies = "1" })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     eq(nameplatesBox(), nil, "the next launch doesn't ask again")
+end)
+
+test("on the controller: A turns the nameplates on, B says no; closing gives the buttons back", function()
+    boot(true, nil)
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(game.bindings.PAD1, "GamepadCameraOffsetPopupButton1", "A: Turn on")
+    eq(game.bindings.PAD2, "GamepadCameraOffsetPopupButton2", "B: No thanks")
+    eq(popup().hint.label, "A: Turn on      B: No thanks")
+    _G[game.bindings.PAD1]:Click()
+    eq(nameplateValues(), "111", "turned on with A")
+    eq(game.bindings.PAD1, nil, "given back"); eq(game.bindings.PAD2, nil)
 end)
 
 test("No thanks changes nothing; the settings page's button asks again", function()
