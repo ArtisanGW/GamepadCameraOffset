@@ -604,7 +604,8 @@ end)
 test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the release .toc", function()
     local function readFile(path) local file = assert(io.open(path)); local text = file:read("*a"); file:close(); return text end
     local packageRules = readFile(".pkgmeta")
-    assert(packageRules:find("\n  %- Debug%.lua"), ".pkgmeta ignores Debug.lua")
+    -- The whole line: the packager takes anything after the name (a comment too) as part of it.
+    assert(packageRules:find("\n  %- Debug%.lua\n"), ".pkgmeta ignores Debug.lua, alone on its line")
     local releaseToc = readFile("GamepadCameraOffset.toc"):gsub("\r", "")
         :gsub("#@do%-not%-package@.-#@end%-do%-not%-package@\n?", "")   -- what the packager does
     local loadedFiles = {}
