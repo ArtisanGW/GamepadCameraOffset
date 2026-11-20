@@ -14,7 +14,17 @@ local game
 -- refuse = true: the game won't take a change to them.
 local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     nameplateOptions = nameplateOptions or {}
-    _G.C_AddOns = { DoesAddOnExist = function(name) return nameplateOptions.reticleAddonInstalled == true and name == "GamepadReticleOnTarget" end }
+    _G.C_AddOns = {
+        DoesAddOnExist = function(name)
+            return name == "GamepadReticleOnTarget" and (nameplateOptions.reticleAddonInstalled == true or nameplateOptions.reticleAddonOff == true)
+        end,
+        -- Turned off for this character (its GUID): the switch reads 0.
+        GetAddOnEnableState = function(name, character)
+            if name == "GamepadReticleOnTarget" and nameplateOptions.reticleAddonOff and character == "Player-93-0A1B2C3D" then return 0 end
+            return 2
+        end,
+    }
+    _G.UnitGUID = function(unit) if unit == "player" then return "Player-93-0A1B2C3D" end end
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
@@ -520,6 +530,18 @@ test("its icon in the AddOns list: Media/icon-64.png, shipped", function()
     eq(toc:match("## IconTexture: ([^\n]+)"), "Interface\\AddOns\\GamepadCameraOffset\\Media\\icon-64.png")
     eq(readBytes("Media/icon-64.png"):sub(2, 4), "PNG", "a PNG file")
     eq(readBytes(".pkgmeta"):find("- Media/icon-64.png", 1, true), nil, "not left out of the release")
+end)
+
+test("debug build: Gamepad Reticle On Target turned off counts as missing, to see its button; the release doesn't", function()
+    local function button()
+        for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Reticle On Target" then return initializer end end
+    end
+    boot(true, nil, false, { reticleAddonOff = true })
+    eq(button() ~= nil, true, "turned off for this character: the button, as players without it see it")
+    boot(true, nil, true, { reticleAddonOff = true })
+    eq(button(), nil, "the release: installed is installed")
+    boot(true, nil, false, { reticleAddonInstalled = true })
+    eq(button(), nil, "debug build, turned on: no button")
 end)
 
 reportLine(passed .. " passed, " .. failed .. " failed")

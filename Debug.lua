@@ -13,6 +13,11 @@ local Camera = _G.GamepadCameraOffset
 local Debug = { SECONDS_BETWEEN_STEPS = 0.6, RUNS_KEPT = 10 }
 Camera.Debug = Debug
 
+-- Debug builds only: the other addon turned off in the AddOns list counts as
+-- missing, so its "Get" button and popup show as players without it see them
+-- (RelatedAddon.lua).
+if Camera.RelatedAddon then Camera.RelatedAddon.countTurnedOffAsMissing = true end
+
 local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
