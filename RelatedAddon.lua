@@ -60,7 +60,7 @@ end
 function Camera.AddRelatedAddonButton(layout)
     if RelatedAddon.Installed() then return end
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
-    layout:AddInitializer(CreateSettingsButtonInitializer(RelatedAddon.TITLE, "Get " .. RelatedAddon.TITLE .. "...",
+    layout:AddInitializer(CreateSettingsButtonInitializer(RelatedAddon.TITLE, "Get " .. RelatedAddon.TITLE,
         function() RelatedAddon.ShowLink() end,
         "To customize the controller's crosshair: its shape, size, color and border, and an icon on your target "
         .. "(a player's class, a raid marker). A separate addon; this one works without it.", true))

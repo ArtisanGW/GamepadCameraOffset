@@ -116,7 +116,7 @@ end
 -- The settings page's button (GamepadCameraOffset.lua calls this while building it).
 function Camera.AddNameplatesButton(layout)
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
-    layout:AddInitializer(CreateSettingsButtonInitializer("Nameplates", "Turn on nameplates...",
+    layout:AddInitializer(CreateSettingsButtonInitializer("Nameplates", "Turn on nameplates",
         function()
             if not Nameplates.Ask() then print("|cff88ccffGamepad Camera Offset|r the nameplates it uses are already on.") end
         end,

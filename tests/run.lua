@@ -425,7 +425,7 @@ test("No thanks changes nothing; the settings page's button asks again", functio
     eq(GamepadCameraOffsetDB.crosshair, true, "the crosshair setting kept")
     local button
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
-    eq(button.buttonText, "Turn on nameplates...")
+    eq(button.buttonText, "Turn on nameplates")
     button.onClick()
     eq(nameplatesBox().shown, true, "asked again")
 end)
@@ -463,7 +463,7 @@ test("without Gamepad Crosshair Customizer: a button shows its link to copy; wit
     boot(true, nil)
     local button
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Crosshair Customizer" then button = initializer end end
-    eq(button and button.buttonText, "Get Gamepad Crosshair Customizer...")
+    eq(button and button.buttonText, "Get Gamepad Crosshair Customizer")
     button.onClick()
     local box = GamepadCameraOffsetLinkBox
     eq(box.shown, true)
