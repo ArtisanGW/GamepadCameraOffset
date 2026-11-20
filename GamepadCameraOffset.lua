@@ -112,8 +112,10 @@ end
 local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
-    -- Settings this addon doesn't use: dropped.
-    settings.crosshairColor, settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil, nil
+    -- Saved keys this addon doesn't use: dropped.
+    for key in pairs(settings) do
+        if Camera.DEFAULTS[key] == nil then settings[key] = nil end
+    end
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
     end

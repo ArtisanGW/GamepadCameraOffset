@@ -561,5 +561,10 @@ test("a Get button for each missing sibling, in order, each with its own CurseFo
     eq(_G.GamepadCameraOffsetPopup.editBox:GetText(), "https://www.curseforge.com/projects/1818557")
 end)
 
+test("saved keys the addon doesn't use are dropped, its settings kept", function()
+    boot(true, { enabled = true, side = 30, height = 0, somethingElse = 1 })
+    eq(GamepadCameraOffsetDB.height, nil); eq(GamepadCameraOffsetDB.somethingElse, nil); eq(GamepadCameraOffsetDB.side, 30)
+end)
+
 reportLine(passed .. " passed, " .. failed .. " failed")
 os.exit(failed == 0 and 0 or 1)
