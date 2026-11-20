@@ -428,36 +428,43 @@ function Camera.RegisterSettings()
     end
 
     addSetting("enabled", Settings.VarType.Boolean, "Enable",
-        "Moves the camera with the settings below, on keyboard and on a controller. "
+        "Moves the camera with the settings below, on keyboard and on a controller.\n\n"
         .. "Turned off, the game's own camera comes back.\n\n"
-        .. "These are the game's experimental camera settings (its ActionCam). "
-        .. "The game's warning about them is hidden.")
+        .. "These are the game's experimental camera settings (its ActionCam); "
+        .. "the game's warning about them is hidden.")
     addSetting("side", Settings.VarType.Number, "Side offset",
-        "Moves the camera over your right or left shoulder. Centered is the game's normal view; "
-        .. "100% is the furthest the addon goes. The effect is stronger when you zoom in.",
+        "Moves the camera over your right or left shoulder.\n\n"
+        .. "• Centered: the game's normal view\n"
+        .. "• 100%: the furthest it goes\n\n"
+        .. "The effect is stronger when you zoom in.",
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
     addSetting("tilt", Settings.VarType.Number, "Tilt",
-        "Tilts the camera up, so your character sits lower on the screen and you see more "
-        .. "of what's ahead. Off is the game's own view; 100% is the strongest tilt. "
-        .. "The further you zoom out, the stronger it is: close up it barely shows.",
+        "Tilts the camera up: your character sits lower on the screen and you see more ahead.\n\n"
+        .. "• Off: the game's own view\n"
+        .. "• 100%: the strongest tilt\n\n"
+        .. "The further you zoom out, the stronger it is; close up it barely shows.",
         sliderOptions(Camera.TILT_MIN, Camera.TILT_MAX, Camera.TILT_STEP,
             function(value) return Camera.Label(value, "Off", "tilt") end))
     addSetting("lookDown", Settings.VarType.Number, "Tilt when looking down",
-        "How much of the tilt stays when you look down at your character: the lower, the "
-        .. "more it fades as the camera looks down; at 100% it stays as strong as with a level "
-        .. "camera. Default is the game's own (about 25%). Only used while Tilt is on.",
+        "How much of the tilt stays when you look down at your character.\n\n"
+        .. "• Default: the game's own (about 25%)\n"
+        .. "• Lower: it fades more as you look down\n"
+        .. "• 100%: as strong as with a level camera\n\n"
+        .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Default", "kept") end))
     addSetting("crosshair", Settings.VarType.Boolean, "Crosshair on your target",
-        "With the controller UI on, puts its aiming dot (and its auto-attack timer) just "
-        .. "below your target's nameplate, or the controller's soft target's, so it stays on "
-        .. "what you attack as you both move. With no target, or nameplates off, it stays "
-        .. "where the game aims. What the controller targets is still decided by the game.")
+        "With the controller UI on, puts its aiming dot (and its auto-attack timer) just below "
+        .. "your target's nameplate, so it stays on what you attack as you both move.\n\n"
+        .. "• Your target first, else the controller's soft target\n"
+        .. "• No target, or nameplates off: where the game aims\n\n"
+        .. "What the controller targets is still decided by the game.")
     addSetting("aim", Settings.VarType.Number, "Crosshair vertical offset",
-        "Moves the controller's aiming dot up or down from just below your target's "
-        .. "nameplate, in screen pixels, e.g. down onto its body. "
-        .. "Default is just below the nameplate. With no target the dot stays where the game aims.",
+        "Moves the aiming dot up or down from just below your target's nameplate, in screen pixels, "
+        .. "e.g. down onto its body.\n\n"
+        .. "• Default: just below the nameplate\n"
+        .. "• No target: where the game aims",
         sliderOptions(Camera.AIM_MIN, Camera.AIM_MAX, Camera.AIM_STEP,
             function(value) return Camera.Label(value, "Default", "up", "down", "px") end))
 

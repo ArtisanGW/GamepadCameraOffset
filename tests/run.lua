@@ -15,7 +15,6 @@ local game
 local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     nameplateOptions = nameplateOptions or {}
     _G.C_AddOns = { DoesAddOnExist = function(name) return nameplateOptions.customizerInstalled == true and name == "GamepadCrosshairCustomizer" end }
-    _G.GamepadCameraOffsetLinkBox = nil
     game = { saved = {}, temp = {}, timers = {}, frames = {}, settings = {}, callbacks = {}, events = 0 }
     local defaults = { test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0",
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
@@ -46,12 +45,15 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local function newFakeRegion()
         local fakeRegion = {}
         for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse",
-            "SetAutoFocus", "SetFocus" }) do
+            "SetAutoFocus", "SetFocus", "SetToplevel", "SetHeight", "ClearAllPoints" }) do
             fakeRegion[methodName] = function() end
         end
         function fakeRegion:SetText(text) self.label = text end
         function fakeRegion:GetText() return self.label end
         function fakeRegion:HighlightText() self.highlighted = true end
+        function fakeRegion:GetStringHeight() return 30 end
+        function fakeRegion:SetShown(shown) self.shown = shown and true or false end
+        function fakeRegion:IsShown() return self.shown == true end
         function fakeRegion:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
         function fakeRegion:CreateTexture() return newFakeRegion() end
         function fakeRegion:CreateFontString() return newFakeRegion() end
@@ -66,10 +68,12 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         function fakeFrame:SetScript(scriptType, handler)
             if scriptType == "OnUpdate" then self.update = handler
             elseif scriptType == "OnClick" then self.click = handler
+            elseif scriptType == "PreClick" then self.preClick = handler
             else self.script = handler end
         end
         function fakeFrame:Show() self.shown = true end
         function fakeFrame:Hide() self.shown = false end
+        function fakeFrame:Click() if self.click then self.click(self) end end
         game.frames[#game.frames + 1] = fakeFrame
         return fakeFrame
     end
@@ -150,13 +154,13 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.GetBuildInfo = function() return "1.60.1", "70959", "", 16001 end
     _G.GamepadCameraOffsetDB = saved
     _G.GamepadCameraOffsetDebugDB = nil
-    _G.GamepadCameraOffsetDebugBox = nil
-    _G.GamepadCameraOffsetNameplatesBox = nil
+    _G.GamepadCameraOffsetPopup = nil
     local printed = {}
     game.printed = printed
     _G.print = function(t) printed[#printed + 1] = t end
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Nameplates.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("RelatedAddon.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
@@ -394,7 +398,20 @@ end)
 
 -- Nameplates for "Crosshair on your target"
 
-local function nameplatesBox() return _G.GamepadCameraOffsetNameplatesBox end
+-- The popup (Popup.lua): shown or nil, its buttons' texts, and a click on one.
+local function popup() local frame = _G.GamepadCameraOffsetPopup; return frame and frame.shown and frame or nil end
+local function popupButtons()
+    local frame, texts = _G.GamepadCameraOffsetPopup, {}
+    for _, button in ipairs(frame.buttons) do if button.shown then texts[#texts + 1] = button.label end end
+    if frame.reloadButton.shown then texts[#texts + 1] = "[secure] " .. frame.reloadButton.label end
+    table.sort(texts)
+    return table.concat(texts, ", ")
+end
+local function clickPopup(text)
+    local frame = _G.GamepadCameraOffsetPopup
+    for _, button in ipairs(frame.buttons) do if button.shown and button.label == text then return button:Click() end end
+end
+local function nameplatesBox() local frame = popup(); return frame and frame.text.label:find("nameplate", 1, true) and frame or nil end
 local function nameplateValues()
     return game.saved.nameplateShowEnemies .. game.saved.nameplateShowFriendlyPlayers .. game.saved.nameplateShowFriendlyClassColor
 end
@@ -404,13 +421,14 @@ test("first launch: a box says which nameplate settings are off; Turn on turns t
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local box = nameplatesBox()
     eq(box and box.shown, true, "the box")
-    eq(box.text.label:find("friendly player nameplates, class colors on friendly player nameplates", 1, true) ~= nil, true,
+    eq(box.text.label:find("• friendly player nameplates\n• class colors on friendly player nameplates", 1, true) ~= nil, true,
         "names the two that are off: " .. box.text.label)
     eq(box.text.label:find("enemy nameplates", 1, true), nil, "not the one already on")
     eq(nameplateValues(), "100", "nothing changed before the click")
-    box.turnOnButton.click()
+    eq(popupButtons(), "No thanks, Turn on"); eq(box.Border.template, "DialogBorderTemplate", "the game's dialog border")
+    clickPopup("Turn on")
     eq(nameplateValues(), "111", "turned on")
-    eq(box.shown, false)
+    eq(box.shown, false, "closed")
     eq(GamepadCameraOffsetDB.nameplatesAsked, true)
     boot(true, GamepadCameraOffsetDB, false, { enemies = "1" })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
@@ -420,7 +438,7 @@ end)
 test("No thanks changes nothing; the settings page's button asks again", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); frame()
-    nameplatesBox().noButton.click()
+    clickPopup("No thanks")
     eq(nameplateValues(), "000", "nothing changed")
     eq(GamepadCameraOffsetDB.crosshair, true, "the crosshair setting kept")
     local button
@@ -453,7 +471,7 @@ end)
 test("if the game won't take the nameplate settings, Crosshair on your target goes off and says why", function()
     boot(true, nil, false, { refuse = true })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
-    nameplatesBox().turnOnButton.click()
+    clickPopup("Turn on")
     eq(nameplateValues(), "000")
     eq(GamepadCameraOffsetDB.crosshair, false, "the setting that needs them, off")
     eq(game.printed[#game.printed]:find("couldn't turn on", 1, true) ~= nil, true, game.printed[#game.printed])
@@ -465,12 +483,13 @@ test("without Gamepad Crosshair Customizer: a button shows its link to copy; wit
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Gamepad Crosshair Customizer" then button = initializer end end
     eq(button and button.buttonText, "Get Gamepad Crosshair Customizer")
     button.onClick()
-    local box = GamepadCameraOffsetLinkBox
-    eq(box.shown, true)
+    local box = popup()
+    eq(box ~= nil, true, "the popup")
     eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1818557", "its CurseForge page")
     eq(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
-    box.closeButton.click()
-    eq(box.shown, false)
+    eq(popupButtons(), "Close, [secure] Reload", "a Reload for once it's installed")
+    clickPopup("Close")
+    eq(popup(), nil, "closed")
     boot(true, nil, false, { customizerInstalled = true })
     for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Gamepad Crosshair Customizer", true, "installed: no button") end
 end)
@@ -504,10 +523,11 @@ test("/gco debug on a controller: every check passes, settings come back, findin
     eq(describeSavedSettings(), "true 30 20 true -5", "your settings back")
     eq(get("test_cameraOverShoulder"), "0.9", "and applied")
     eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
-    local reloadBox = GamepadCameraOffsetDebugBox
-    eq(reloadBox.shown, true, "reload box shown")
+    local reloadBox = popup()
+    eq(reloadBox ~= nil, true, "reload popup shown")
     eq(reloadBox.reloadButton.attributes.macrotext, "/reload"); eq(reloadBox.reloadButton.template, "SecureActionButtonTemplate,UIPanelButtonTemplate")
-    reloadBox.laterButton.click(); eq(reloadBox.shown, false, "Later hides it")
+    eq(popupButtons(), "Later, [secure] Reload")
+    clickPopup("Later"); eq(popup(), nil, "Later hides it")
 end)
 
 test("/gco debug with a target: the crosshair on its nameplate is checked without measuring it (a restricted region)", function()
@@ -542,7 +562,9 @@ test("/gco debug on keyboard: crosshair checks skipped, the rest pass", function
 end)
 
 test("/gco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
-    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 0 })
+    -- Nameplates on: no first-launch nameplate question in the way of the debug popup.
+    boot(true, { enabled = true, side = 30, tilt = 20, crosshair = true, aim = 0 }, false,
+        { enemies = "1", friends = "1", classColors = "1" })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     frame(); frame()
@@ -550,12 +572,12 @@ test("/gco debug: a fight stops it, settings come back, the box waits for the fi
     game.fire("PLAYER_REGEN_DISABLED")
     eq(GamepadCameraOffsetDebugDB.runs[1].stopped, "combat")
     eq(describeSavedSettings(), "true 30 20 true 0")
-    eq(GamepadCameraOffsetDebugBox, nil, "no box in combat")
+    eq(popup(), nil, "no popup in combat")
     runUntilNoTimersLeft()
     eq(#GamepadCameraOffsetDebugDB.runs, 1, "nothing ran after the stop")
     game.combat = false
     game.fire("PLAYER_REGEN_ENABLED")
-    eq(GamepadCameraOffsetDebugBox.shown, true, "shown once the fight is over")
+    eq(popup() ~= nil, true, "shown once the fight is over")
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     eq(#game.timers > 0, true, "and out of combat it runs again")
 end)
@@ -600,7 +622,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Nameplates.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,Nameplates.lua,RelatedAddon.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()

@@ -7,6 +7,7 @@
 ## Category: Gamepad
 
 GamepadCameraOffset.lua
+Popup.lua
 Nameplates.lua
 RelatedAddon.lua
 #@do-not-package@

@@ -31,15 +31,18 @@ function Nameplates.Missing()
     return missing
 end
 
+-- One line each, as a list.
+local function bulletList(entries)
+    local lines = {}
+    for _, entry in ipairs(entries) do lines[#lines + 1] = "• " .. entry[2] end
+    return table.concat(lines, "\n")
+end
+
 local function labels(entries)
     local names = {}
     for _, entry in ipairs(entries) do names[#names + 1] = entry[2] end
     return table.concat(names, ", ")
 end
-
-local box
-
-local function closeBox() if box then box:Hide() end end
 
 -- Turns the missing settings on, then checks they took; if not, the crosshair
 -- setting that needs them goes off.
@@ -59,48 +62,22 @@ function Nameplates.TurnOn()
     return true
 end
 
-local function buildBox()
-    box = CreateFrame("Frame", "GamepadCameraOffsetNameplatesBox", UIParent)
-    box:SetSize(420, 150)
-    box:SetPoint("CENTER", UIParent, "CENTER", 0, 160)
-    box:SetFrameStrata("DIALOG")
-    box:EnableMouse(true)
-    local background = box:CreateTexture(nil, "BACKGROUND")
-    background:SetAllPoints()
-    background:SetColorTexture(0, 0, 0, 0.85)
-    box.text = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    box.text:SetPoint("TOP", box, "TOP", 0, -14)
-    box.text:SetWidth(390)
-    box.turnOnButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    box.turnOnButton:SetSize(150, 24)
-    box.turnOnButton:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 40, 14)
-    box.turnOnButton:SetText("Turn on")
-    box.turnOnButton:SetScript("OnClick", function()
-        closeBox()
-        if InCombatLockdown() then return Nameplates.Ask() end   -- after the fight
-        Nameplates.TurnOn()
-    end)
-    box.noButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    box.noButton:SetSize(150, 24)
-    box.noButton:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -40, 14)
-    box.noButton:SetText("No thanks")
-    box.noButton:SetScript("OnClick", closeBox)
-    Nameplates.box = box
-end
-
--- Shows the box if a setting is off (out of combat; in one, after it).
--- Returns whether it showed.
+-- Shows the popup (Popup.lua, the game's style) if a setting is off; in a fight,
+-- the popup opens once it's over. Returns whether there was something to ask.
 function Nameplates.Ask()
     local missing = Nameplates.Missing()
     if #missing == 0 then return false end
-    if InCombatLockdown() then
-        Nameplates.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        return false
-    end
-    if not box then buildBox() end
-    box.text:SetText("Gamepad Camera Offset\n\n\"Crosshair on your target\" puts the crosshair under your "
-        .. "target's nameplate. These are off: " .. labels(missing) .. ".\nTurn them on? (Options > Nameplates)")
-    box:Show()
+    Camera.Popup.Show({
+        text = "Gamepad Camera Offset\n\n\"Crosshair on your target\" puts the crosshair under your target's nameplate. "
+            .. "These are off:\n\n" .. bulletList(missing) .. "\n\nTurn them on? (Options > Nameplates)",
+        buttons = {
+            { text = "Turn on", onClick = function()
+                if InCombatLockdown() then return Nameplates.Ask() end   -- after the fight
+                Nameplates.TurnOn()
+            end },
+            { text = "No thanks" },
+        },
+    })
     return true
 end
 
@@ -120,18 +97,16 @@ function Camera.AddNameplatesButton(layout)
         function()
             if not Nameplates.Ask() then print("|cff88ccffGamepad Camera Offset|r the nameplates it uses are already on.") end
         end,
-        "\"Crosshair on your target\" uses the target's nameplate: enemy and friendly player nameplates, "
-        .. "and class colors on friendly ones. Asks before turning on any that are off.", true))
+        "\"Crosshair on your target\" uses the target's nameplate. It needs:\n\n"
+        .. "• Enemy nameplates\n"
+        .. "• Friendly player nameplates\n"
+        .. "• Class colors on friendly ones\n\n"
+        .. "Asks before turning on any that are off.", true))
 end
 
 Nameplates.eventFrame = CreateFrame("Frame")
 Nameplates.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-Nameplates.eventFrame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_ENTERING_WORLD" then
-        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        askOnFirstLaunch()
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        Nameplates.Ask()
-    end
+Nameplates.eventFrame:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    askOnFirstLaunch()
 end)
