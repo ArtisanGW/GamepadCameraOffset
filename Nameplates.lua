@@ -101,7 +101,11 @@ function Camera.AddNameplatesButton(layout)
         .. "• Enemy nameplates\n"
         .. "• Friendly player nameplates\n"
         .. "• Class colors on friendly ones\n\n"
-        .. "Asks before turning on any that are off.", true))
+        .. "Asks before turning on any that are off.", true,
+        nil,
+        -- Greyed out while they're all on: checked when the button shows and on any
+        -- CVar change (the game's gameDataFunc/gameDataEvent, Blizzard_SettingControls.lua:971).
+        function(button) button:SetEnabled(#Nameplates.Missing() > 0) end, "CVAR_UPDATE"))
 end
 
 Nameplates.eventFrame = CreateFrame("Frame")

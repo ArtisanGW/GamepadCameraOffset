@@ -152,8 +152,9 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.UnitExists = function(unit) return game.units[unit] == true end
     _G.GetPhysicalScreenSize = function() return 2304, 1536 end
     game.buttons = {}
-    _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip)
-        return { name = name, buttonText = buttonText, onClick = onClick, tooltip = tooltip }
+    _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip, addSearchTags, newTagID, gameDataFunc, gameDataEvent)
+        return { name = name, buttonText = buttonText, onClick = onClick, tooltip = tooltip,
+            gameDataFunc = gameDataFunc, gameDataEvent = gameDataEvent }
     end
     local function addInitializer(_, initializer) game.buttons[#game.buttons + 1] = initializer end
     _G.SettingsPanel = { GetLayout = function() return { AddInitializer = addInitializer } end }
@@ -473,6 +474,19 @@ test("No thanks changes nothing; the settings page's button asks again", functio
     eq(button.buttonText, "Turn on nameplates")
     button.onClick()
     eq(nameplatesBox().shown, true, "asked again")
+end)
+
+test("the Turn on nameplates button is greyed out while they're all on, re-checked on a CVar change", function()
+    boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
+    local button
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
+    eq(button.gameDataEvent, "CVAR_UPDATE")
+    local fakeButton = { SetEnabled = function(self, enabled) self.enabled = enabled end }
+    button.gameDataFunc(fakeButton)
+    eq(fakeButton.enabled, false, "all on: not clickable")
+    C_CVar.SetCVar("nameplateShowFriendlyPlayers", "0")
+    button.gameDataFunc(fakeButton)
+    eq(fakeButton.enabled, true, "one off: clickable")
 end)
 
 test("no box when the nameplates are on, or the crosshair setting is off", function()
