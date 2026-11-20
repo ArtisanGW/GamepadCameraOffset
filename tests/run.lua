@@ -377,25 +377,13 @@ test("without Gamepad Reticle On Target: a button shows its link to copy; with i
     for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Reticle on your target", true, "installed: no button") end
 end)
 
-test("updating from 1.6: the old reticle settings dropped; had it on, told once where it went", function()
-    boot(true, { enabled = true, side = 30, crosshair = true, aim = -5, nameplatesAsked = true })
+test("settings left by earlier versions are dropped quietly: no popup, the camera settings kept", function()
+    boot(true, { enabled = true, side = 30, crosshairColor = "FF3030FF", crosshair = true, aim = -5, nameplatesAsked = true })
     eq(GamepadCameraOffsetDB.crosshair, nil); eq(GamepadCameraOffsetDB.aim, nil); eq(GamepadCameraOffsetDB.nameplatesAsked, nil)
+    eq(GamepadCameraOffsetDB.crosshairColor, nil)
     eq(GamepadCameraOffsetDB.side, 30, "the camera settings kept")
     game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local box = popup()
-    eq(box ~= nil and box.text.label:find("is now its own addon", 1, true) ~= nil, true, "said once")
-    eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1819101")
-    clickPopup("Close")
-    boot(true, GamepadCameraOffsetDB)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(popup(), nil, "not again")
-
-    boot(true, { crosshair = false, aim = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(popup(), nil, "had it off: nothing to say")
-    boot(true, { crosshair = true }, false, { reticleAddonInstalled = true })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(popup(), nil, "already installed: nothing to say")
+    eq(popup(), nil, "nothing said")
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.

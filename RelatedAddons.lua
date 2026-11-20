@@ -3,8 +3,6 @@
 -- link selected to copy (the game can't open a web page) and a Reload for once
 -- it's installed. The other addons are named here only as text: nothing calls
 -- them or depends on them.
--- "Crosshair on your target" was part of this addon until 1.7.0: if you had it
--- on, the Gamepad Reticle On Target popup opens once at login to say where it went.
 local Camera = _G.GamepadCameraOffset
 
 local RelatedAddons = {
@@ -18,7 +16,6 @@ local RelatedAddons = {
             LABEL = "Reticle on your target",   -- the settings row: what it does
             LINK = "https://www.curseforge.com/projects/1819101",
             TOOLTIP = "Puts the controller's reticle just below your target's nameplate.\n\n"
-            .. "It was \"Crosshair on your target\" here before 1.7.0.\n\n"
             .. "A separate addon, Gamepad Reticle On Target; this one works without it.",
         },
         {
@@ -102,15 +99,3 @@ function Camera.AddRelatedAddonButtons(layout)
             function() RelatedAddons.ShowLink(sibling) end, sibling.TOOLTIP, true))
     end
 end
-
--- Once, at the first login after the update, for those who had it on.
-RelatedAddons.eventFrame = CreateFrame("Frame")
-RelatedAddons.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-RelatedAddons.eventFrame:SetScript("OnEvent", function(self)
-    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    local reticleAddon = RelatedAddons.Sibling("GamepadReticleOnTarget")
-    if not Camera.reticleMoved or RelatedAddons.Installed(reticleAddon) then return end
-    Camera.reticleMoved = nil
-    RelatedAddons.ShowLink(reticleAddon, "Gamepad Camera Offset\n\n\"Crosshair on your target\" is now its own addon, "
-        .. reticleAddon.TITLE .. ". The camera settings stay here.\n\n")
-end)

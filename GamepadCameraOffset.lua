@@ -114,12 +114,8 @@ end
 local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
-    settings.crosshairColor = nil   -- 1.0's crosshair color: no longer part of this addon
-    -- 1.6's "Crosshair on your target" is its own addon since 1.7.0: Gamepad Reticle On Target.
-    if settings.crosshair ~= nil or settings.aim ~= nil then
-        if settings.crosshair then Camera.reticleMoved = true end   -- said once, at login (RelatedAddons.lua)
-        settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil
-    end
+    -- Settings this addon no longer has, left by earlier versions: dropped.
+    settings.crosshairColor, settings.crosshair, settings.aim, settings.nameplatesAsked = nil, nil, nil, nil
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
     end
