@@ -483,13 +483,15 @@ test("No thanks changes nothing; the settings page's button asks again", functio
     eq(nameplatesBox().shown, true, "asked again")
 end)
 
-test("the Turn on nameplates row shows only while one of them is off", function()
+test("the Turn on nameplates row is built only when one of them is off; no function of ours for the game to call", function()
+    local function nameplatesRow()
+        for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then return initializer end end
+    end
     boot(true, nil, false, { enemies = "1", friends = "1", classColors = "1" })
-    local button
-    for _, initializer in ipairs(game.buttons) do if initializer.name == "Nameplates" then button = initializer end end
-    eq(button:Shown(), false, "all on: no row")
-    C_CVar.SetCVar("nameplateShowFriendlyPlayers", "0")
-    eq(button:Shown(), true, "one off: the row is there")
+    eq(nameplatesRow(), nil, "all on: no row")
+    boot(true, nil, false, { enemies = "1", friends = "0", classColors = "1" })
+    eq(nameplatesRow() ~= nil, true, "one off: the row")
+    eq(#nameplatesRow().shownPredicates, 0, "no shown predicate: it froze the controller's navigation")
 end)
 
 test("no box when the nameplates are on, or the crosshair setting is off", function()

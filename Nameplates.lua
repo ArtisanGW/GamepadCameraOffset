@@ -91,8 +91,14 @@ local function askOnFirstLaunch()
 end
 
 -- The settings page's button (GamepadCameraOffset.lua calls this while building it).
+-- Added only if one of them is off when the page is built (each login or
+-- reload): no function of ours for the game to call while it lays out the page.
+-- A shown predicate (AddShownPredicate) did that, and from then on the
+-- controller's navigation stayed stuck on the first row of our settings pages,
+-- with no error (seen in game, 2026-11-20).
 function Camera.AddNameplatesButton(layout)
     if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
+    if #Nameplates.Missing() == 0 then return end
     local initializer = CreateSettingsButtonInitializer("Nameplates", "Turn on nameplates",
         function()
             if not Nameplates.Ask() then print("|cff88ccffGamepad Camera Offset|r the nameplates it uses are already on.") end
@@ -102,12 +108,6 @@ function Camera.AddNameplatesButton(layout)
         .. "• Friendly player nameplates\n"
         .. "• Class colors on friendly ones\n\n"
         .. "Asks before turning on any that are off.", true)
-    -- Only shown while one of them is off: the game checks a shown predicate each
-    -- time it lays out the page (AddShownPredicate, Blizzard_Settings.lua:96,
-    -- forever branch).
-    if type(initializer.AddShownPredicate) == "function" then
-        initializer:AddShownPredicate(function() return #Nameplates.Missing() > 0 end)
-    end
     layout:AddInitializer(initializer)
 end
 
