@@ -44,24 +44,22 @@
     <path d="M 254 318 Q 230 314 204 304"/>
   </g>
 
-  <!-- horns, curving out and up, with their rings -->
-  <g fill="none" stroke="#D9B48F" stroke-width="26" stroke-linecap="round">
-    <path d="M 108 262 C 62 266 34 236 34 184"/>
-    <path d="M 192 262 C 238 266 266 236 266 184"/>
+  <!-- horns, curving out and up to a sharp point, with their rings -->
+  <g fill="#D9B48F">
+    <path d="M 100 278 C 48 282 20 236 36 168 C 46 222 76 240 118 246 Z"/>
+    <path d="M 200 278 C 252 282 280 236 264 168 C 254 222 224 240 182 246 Z"/>
   </g>
   <g fill="none" stroke="#15202E" stroke-width="5" stroke-linecap="round">
-    <path d="M 78 250 L 82 274"/><path d="M 52 230 L 28 238"/>
-    <path d="M 222 250 L 218 274"/><path d="M 248 230 L 272 238"/>
+    <path d="M 70 276 L 80 246"/><path d="M 36 232 L 52 216"/>
+    <path d="M 230 276 L 220 246"/><path d="M 264 232 L 248 216"/>
   </g>
 
   <!-- the head, big and round -->
   <ellipse cx="150" cy="296" rx="68" ry="60" fill="#5BE0C8"/>
 
-  <!-- the hair falls down the back of the head into the braid -->
-  <path d="M 112 276 Q 150 306 188 276 Q 180 322 166 356 L 134 356 Q 120 322 112 276 Z" fill="#B58E6C"/>
-  <!-- the hair, covering the top and back of the head, with wavy ends and strands -->
-  <path d="M 90 284 C 86 206 214 206 210 284 Q 196 262 180 282 Q 165 260 150 282 Q 135 260 120 282 Q 104 262 90 284 Z" fill="#B58E6C"/>
-  <path d="M 126 236 Q 132 256 128 274 M 150 226 Q 154 250 150 270 M 174 236 Q 168 256 172 274" fill="none" stroke="#8A6548" stroke-width="5" stroke-linecap="round"/>
+  <!-- the hair: one piece, from the top of the head down the back of the neck into the braid -->
+  <path d="M 92 286 C 86 206 214 206 208 286 C 204 314 184 338 170 362 L 130 362 C 116 338 96 314 92 286 Z" fill="#B58E6C"/>
+  <path d="M 124 232 Q 134 280 138 340 M 150 224 Q 152 290 150 352 M 176 232 Q 166 280 162 340" fill="none" stroke="#8A6548" stroke-width="5" stroke-linecap="round"/>
 
   <!-- the reticle: the game's white dot (half this radius, 15, in icon-400.png for CurseForge: full size looked like a moon there) -->
   <circle cx="392" cy="196" r="30" fill="#FFFFFF"/>
