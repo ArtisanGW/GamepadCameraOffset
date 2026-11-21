@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Gamepad Camera Offset: a tauren with a cape, seen from behind, off to the side; the game's white dot ahead.
+       Palette as Alt Courier's icon: navy, teal, pastel pink and yellow, and pastel tan for the horns. -->
+  <rect x="0" y="0" width="512" height="512" fill="#15202E"/>
+
+  <!-- the cape, falling from the shoulders past the bottom edge, with its folds -->
+  <path d="M 52 384 C 52 352 108 344 150 344 C 192 344 248 352 248 384 L 274 512 L 26 512 Z" fill="#F4A7B9"/>
+  <g fill="none" stroke="#E58BA3" stroke-width="8" stroke-linecap="round">
+    <path d="M 104 396 Q 94 456 84 512"/>
+    <path d="M 150 400 L 150 512"/>
+    <path d="M 196 396 Q 206 456 216 512"/>
+  </g>
+
+  <!-- the shoulders: broad plates, only a little rounded, each with a seam -->
+  <g fill="#5BE0C8">
+    <rect x="4" y="354" width="98" height="72" rx="20" transform="rotate(-6 53 390)"/>
+    <rect x="198" y="354" width="98" height="72" rx="20" transform="rotate(6 247 390)"/>
+    <rect x="92" y="336" width="116" height="56" rx="24"/>
+  </g>
+  <g fill="none" stroke="#15202E" stroke-width="5" stroke-linecap="round">
+    <path d="M 24 396 Q 54 404 84 392"/>
+    <path d="M 276 396 Q 246 404 216 392"/>
+  </g>
+  <!-- the braid down the back, tied with yellow -->
+  <g fill="#BBA9F0">
+    <ellipse cx="150" cy="372" rx="17" ry="17"/><ellipse cx="150" cy="402" rx="16" ry="17"/>
+    <ellipse cx="150" cy="432" rx="15" ry="16"/><ellipse cx="150" cy="460" rx="14" ry="15"/>
+  </g>
+  <path d="M 138 417 Q 150 424 162 417 M 138 447 Q 150 454 162 447" fill="none" stroke="#9D8BDB" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="150" cy="486" r="9" fill="#F6D98B"/>
+  <!-- the cape's cord and clasp -->
+  <path d="M 100 380 Q 150 400 200 380" fill="none" stroke="#F6D98B" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="150" cy="394" r="11" fill="#F6D98B"/>
+
+  <!-- ears, sticking out sideways; from behind it's their back that shows, so no pink inside, just a fold line -->
+  <g fill="#5BE0C8">
+    <ellipse cx="72" cy="314" rx="42" ry="19" transform="rotate(-18 72 314)"/>
+    <ellipse cx="228" cy="314" rx="42" ry="19" transform="rotate(18 228 314)"/>
+  </g>
+  <g fill="none" stroke="#15202E" stroke-width="5" stroke-linecap="round">
+    <path d="M 46 318 Q 70 314 96 304" transform="rotate(0)"/>
+    <path d="M 254 318 Q 230 314 204 304"/>
+  </g>
+
+  <!-- horns, curving out and up, with their rings -->
+  <g fill="none" stroke="#D9B48F" stroke-width="26" stroke-linecap="round">
+    <path d="M 108 262 C 62 266 34 236 34 184"/>
+    <path d="M 192 262 C 238 266 266 236 266 184"/>
+  </g>
+  <g fill="none" stroke="#15202E" stroke-width="5" stroke-linecap="round">
+    <path d="M 78 250 L 82 274"/><path d="M 52 230 L 28 238"/>
+    <path d="M 222 250 L 218 274"/><path d="M 248 230 L 272 238"/>
+  </g>
+
+  <!-- the head, big and round -->
+  <ellipse cx="150" cy="296" rx="68" ry="60" fill="#5BE0C8"/>
+
+  <!-- the hair falls down the back of the head into the braid -->
+  <path d="M 112 276 Q 150 306 188 276 Q 180 322 166 356 L 134 356 Q 120 322 112 276 Z" fill="#BBA9F0"/>
+  <!-- the hair, covering the top and back of the head, with wavy ends and strands -->
+  <path d="M 90 284 C 86 206 214 206 210 284 Q 196 262 180 282 Q 165 260 150 282 Q 135 260 120 282 Q 104 262 90 284 Z" fill="#BBA9F0"/>
+  <path d="M 126 236 Q 132 256 128 274 M 150 226 Q 154 250 150 270 M 174 236 Q 168 256 172 274" fill="none" stroke="#9D8BDB" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- the reticle: the game's white dot (half this radius, 15, in icon-400.png for CurseForge: full size looked like a moon there) -->
+  <circle cx="392" cy="196" r="30" fill="#FFFFFF"/>
+</svg>
