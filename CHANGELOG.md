@@ -1,5 +1,9 @@
 # Gamepad Camera Offset
 
+## 1.0.1
+
+- New icon: a tauren with horns, hair and a cape, seen from behind
+
 ## 1.0.0
 
 First release.
