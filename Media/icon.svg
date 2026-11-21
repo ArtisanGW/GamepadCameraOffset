@@ -23,16 +23,17 @@
     <path d="M 22 374 Q 46 364 76 366" stroke="#DCE6F0" stroke-width="7"/>
     <path d="M 278 374 Q 254 364 224 366" stroke="#DCE6F0" stroke-width="7"/>
   </g>
-  <!-- the braid down the back, tied with yellow -->
+  <!-- the cape's cord and clasp -->
+  <path d="M 100 380 Q 150 400 200 380" fill="none" stroke="#F6D98B" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="150" cy="394" r="11" fill="#F6D98B"/>
+
+  <!-- the braid down the back, in front of the cape's cord, tied with yellow -->
   <g fill="#B58E6C">
     <ellipse cx="150" cy="372" rx="17" ry="17"/><ellipse cx="150" cy="402" rx="16" ry="17"/>
     <ellipse cx="150" cy="432" rx="15" ry="16"/><ellipse cx="150" cy="460" rx="14" ry="15"/>
   </g>
   <path d="M 138 417 Q 150 424 162 417 M 138 447 Q 150 454 162 447" fill="none" stroke="#8A6548" stroke-width="5" stroke-linecap="round"/>
   <circle cx="150" cy="486" r="9" fill="#F6D98B"/>
-  <!-- the cape's cord and clasp -->
-  <path d="M 100 380 Q 150 400 200 380" fill="none" stroke="#F6D98B" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="150" cy="394" r="11" fill="#F6D98B"/>
 
   <!-- ears, sticking out sideways; from behind it's their back that shows, so no pink inside, just a fold line -->
   <g fill="#5BE0C8">
