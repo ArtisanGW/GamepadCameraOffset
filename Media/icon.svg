@@ -21,14 +21,14 @@
   <path d="M 100 380 Q 150 400 200 380" fill="none" stroke="#F6D98B" stroke-width="10" stroke-linecap="round"/>
   <circle cx="150" cy="394" r="11" fill="#F6D98B"/>
 
-  <!-- ears, sticking out sideways, pink inside -->
+  <!-- ears, sticking out sideways; from behind it's their back that shows, so no pink inside, just a fold line -->
   <g fill="#5BE0C8">
     <ellipse cx="72" cy="314" rx="42" ry="19" transform="rotate(-18 72 314)"/>
     <ellipse cx="228" cy="314" rx="42" ry="19" transform="rotate(18 228 314)"/>
   </g>
-  <g fill="#F4A7B9">
-    <ellipse cx="68" cy="314" rx="24" ry="9" transform="rotate(-18 68 314)"/>
-    <ellipse cx="232" cy="314" rx="24" ry="9" transform="rotate(18 232 314)"/>
+  <g fill="none" stroke="#15202E" stroke-width="5" stroke-linecap="round">
+    <path d="M 46 318 Q 70 314 96 304" transform="rotate(0)"/>
+    <path d="M 254 318 Q 230 314 204 304"/>
   </g>
 
   <!-- horns, curving out and up, with their rings -->
