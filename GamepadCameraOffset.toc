@@ -19,4 +19,5 @@ RelatedAddons.lua
 #@do-not-package@
 # Development builds only: left out of the release (.pkgmeta)
 Debug.lua
+DebugKeys.lua
 #@end-do-not-package@

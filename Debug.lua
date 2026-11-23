@@ -260,6 +260,8 @@ function Debug.Command(arguments)
     elseif arguments == "last" then
         local runs = getDebugStore().runs
         Debug.PrintRun(runs[#runs])
+    elseif arguments == "keys" and Camera.DebugKeys then
+        Camera.DebugKeys.Toggle()
     elseif arguments == "clear" then
         getDebugStore().runs = {}
         say("saved runs cleared")
