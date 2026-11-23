@@ -513,8 +513,8 @@ test("Stop at center on: hold & drag stops there for a moment, with a buzz on th
     eq(#vibrations, 1, "a buzz")
     tick(0.05)
     eq(GamepadCameraOffsetDB.side, 0, "held a moment")
-    tick(0.1)
-    eq(GamepadCameraOffsetDB.side, -5, "then on: 15% moved, 10% held")
+    tick(0.15)
+    eq(GamepadCameraOffsetDB.side, -5, "then on: 20% moved, 15% held")
     eq(#vibrations, 1, "one buzz")
     keys.Drag("up")
     _G.C_GamePad = nil
