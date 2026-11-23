@@ -4,14 +4,13 @@ With a controller, the game keeps your character in the middle of the screen, wi
 
 ![Hold a key and slide the camera from shoulder to shoulder](https://raw.githubusercontent.com/ArtisanGW/GamepadCameraOffset/main/Media/description/hold-and-drag.gif)
 
-**Hold & drag:** bind one key (or a mouse button, or a controller button through Steam) and slide the camera from one shoulder to the other while you play, no menus. Turn up Drag speed to go faster.
+**Hold & drag:** bind one key (or a mouse button, or a controller button through Steam) and slide the camera from one shoulder to the other while you play, no menus.
 
 It's a simple tool with no dependencies:
 - Side offset: the camera over your right or left shoulder
 - Tilt: your character sits lower on the screen, so you see more ahead
 - Tilt when looking down: how much of the tilt stays when you look down at your character
 - Keys for the side offset, in Key Bindings > AddOns: hold & drag, or step it left and right
-- Drag speed: how fast hold & drag moves it
 - Settings in Options > AddOns > Gamepad Camera Offset, or /gco
 
 Every setting starts at the game's own value, so nothing changes until you move one. Set the camera where you want it and it stays there, through reloads and switches to the controller. It works with keyboard and mouse too.
