@@ -233,6 +233,7 @@ test("registers its page under Options > AddOns, with the game's own values as d
     eq(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
     eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 0); eq(GamepadCameraOffsetDB.tilt, 0)
     eq(GamepadCameraOffsetDB.lookDown, 0, "Default: the game's own")
+    eq(GamepadCameraOffsetDB.dragSpeed, 100, "Drag speed: Normal")
     eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
     eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
     eq(game.options.aim, nil, "no reticle offset here any more")
@@ -365,6 +366,19 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     eq(GamepadCameraOffsetDB.side, -100, "let go: stays")
 end)
 
+test("drag speed: 200% moves the slider twice as far for the same cursor move", function()
+    boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 200 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    keys.Drag("down")
+    game.cursorX = 500 + 250   -- an eighth of the 2000-pixel screen
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, 50, "a quarter of the range at Normal would be 25")
+    keys.Drag("up")
+    eq(game.options.dragSpeed.format(100), "Normal"); eq(game.options.dragSpeed.format(250), "250%")
+    eq(GamepadCameraOffsetDB.dragSpeed, 200)
+end)
+
 test("a Key Bindings button: opens the game's page at AddOns, that section opened up", function()
     local addonsSection = { GetName = function() return "AddOns" end, data = {} }
     local opened
@@ -420,6 +434,18 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     eq(taker.takesStick, false, "the click let go: the controller is the game's again")
     eq(taker.takesButtons, false)
     eq(taker.shown, false)
+end)
+
+test("drag speed: 300% makes the left stick three times faster", function()
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 300 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    local taker = controllerTaker()
+    keys.Drag("down")
+    taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
+    tick(0.25)
+    eq(GamepadCameraOffsetDB.side, 75, "25 at Normal")
+    keys.Drag("up")
 end)
 
 test("hold & drag: in combat only the mouse; a fight starting gives the controller back", function()

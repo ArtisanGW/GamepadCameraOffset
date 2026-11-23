@@ -45,11 +45,14 @@ local Camera = {
     --   lookDown: 1 to 100, how much of the tilt stays when you look down at your
     --           character (the game's DownScale, 0 to 1). 0 is Default: the game's
     --           own DownScale (0.25).
+    --   dragSpeed: 100 (Normal) to 500: how fast the side offset follows the
+    --           mouse and the left stick while hold & drag is held (OffsetKeys.lua).
     -- Every slider starts at the game's own value: nothing changes until you move one.
-    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0 },
+    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
+    DRAG_SPEED_MIN = 100, DRAG_SPEED_MAX = 500, DRAG_SPEED_STEP = 25,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
     -- tilts: 0.125 is the strongest usable tilt, by about 0.75 there's
@@ -243,6 +246,13 @@ function Camera.Label(value, zeroWord, positiveWord, negativeWord)
     return string.format("%d%% %s", amount, direction)
 end
 
+-- "Normal" at 100%, else the percentage.
+function Camera.DragSpeedLabel(value)
+    value = math.floor((tonumber(value) or 100) + 0.5)
+    if value == 100 then return "Normal" end
+    return string.format("%d%%", value)
+end
+
 local function sliderOptions(minimum, maximum, step, formatLabel)
     local options = Settings.CreateSliderOptions(minimum, maximum, step)
     local rightLabel = MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label
@@ -301,6 +311,12 @@ function Camera.RegisterSettings()
         .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Default", "kept") end))
+    addSetting("dragSpeed", Settings.VarType.Number, "Drag speed",
+        "How fast hold & drag moves the side offset.\n\n"
+        .. "• Mouse: at Normal, the whole screen's width sweeps it from left to right\n"
+        .. "• Left stick: at Normal, a full push sweeps it in two seconds",
+        sliderOptions(Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DRAG_SPEED_STEP,
+            function(value) return Camera.DragSpeedLabel(value) end))
     if Camera.OffsetKeys then Camera.OffsetKeys.AddButton(layout) end   -- OffsetKeys.lua
     if Camera.AddRelatedAddonButtons then Camera.AddRelatedAddonButtons(layout) end   -- RelatedAddons.lua
     Settings.RegisterAddOnCategory(category)
