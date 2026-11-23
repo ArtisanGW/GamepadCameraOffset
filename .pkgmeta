@@ -16,6 +16,9 @@ ignore:
   - Media/icon-400.png
   # earlier icon drafts, kept for reference
   - Media/alternatives
+  # the CurseForge description and its movie, linked from CURSEFORGE.md
+  - Media/description
+  - CURSEFORGE.md
 
 # The changelog shown with each release: written by hand, not built from commit messages.
 manual-changelog:
