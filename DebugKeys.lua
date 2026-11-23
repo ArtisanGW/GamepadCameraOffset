@@ -2,14 +2,14 @@
 -- the screen what reaches the game (mouse and controller buttons, the binding's
 -- key down/up, the cursor and the side value) and keeps the last lines in
 -- GamepadCameraOffsetDebugDB.keyLog, written to disk on /reload.
--- On from login; /gco debug keys turns it off or on.
+-- Off at login; /gco debug keys turns it on or off.
 local Camera = _G.GamepadCameraOffset
 local OffsetKeys = Camera.OffsetKeys
 
 local DebugKeys = { LOG_LINES = 200, SAMPLE_SECONDS = 0.25 }
 Camera.DebugKeys = DebugKeys
 
-local shown = true
+local shown = false
 local dragHeld = false
 local lastLine = "waiting"
 
@@ -73,6 +73,7 @@ events:SetScript("OnEvent", function(_, event, button)
 end)
 
 local sampler = CreateFrame("Frame")
+sampler:Hide()
 local untilSample = 0
 sampler:SetScript("OnUpdate", function(_, elapsed)
     untilSample = untilSample - elapsed
