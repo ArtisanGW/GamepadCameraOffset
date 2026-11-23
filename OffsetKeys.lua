@@ -9,13 +9,12 @@
 --            slider from 100% left to 100% right;
 --          • the left stick: the further it's pushed, the faster it goes;
 --          • the D-pad's left and right: a step each press, like the keys below.
---          The left stick is taken from the game only while it's held
---          (EnableGamePadStick, as the game's soft cursor does,
---          Blizzard_GamepadSoftCursor/SoftCursor.lua:25), so it doesn't walk
---          meanwhile. The D-pad's left and right get the step keys as override
---          bindings meanwhile: a frame taking the buttons (EnableGamePadButton)
---          lost to the controller UI's own bindings in game. Both are blocked in
---          combat: there only the mouse works, and a fight starting gives them back.
+--          The stick and the D-pad are taken from the game only while it's held
+--          (EnableGamePadStick / EnableGamePadButton, as the game's soft cursor
+--          does, Blizzard_GamepadSoftCursor/SoftCursor.lua:25), so the left
+--          stick doesn't walk meanwhile. Both are blocked in combat: there only
+--          the mouse works. Any other controller button let go ends it, so the
+--          controller can never stay taken.
 --   Left / Right: one step each press (the slider's step); held, it keeps
 --          going, so a controller button works the same.
 -- Each change goes through the slider's own setting, so the settings page,
@@ -28,7 +27,7 @@ local OffsetKeys = {
     REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
     STICK = "Movement",             -- the game's name for the left stick
-    PAD_STEPS = { PADDLEFT = "GAMEPADCAMERAOFFSET_LEFT", PADDRIGHT = "GAMEPADCAMERAOFFSET_RIGHT" },
+    PAD_STEPS = { PADDLEFT = -1, PADDRIGHT = 1 },
 }
 Camera.OffsetKeys = OffsetKeys
 
@@ -89,11 +88,7 @@ end
 local function setControllerTaken(taken)
     if held then held.controllerTaken = taken end
     updater:EnableGamePadStick(taken)
-    if taken then
-        for button, bindingName in pairs(OffsetKeys.PAD_STEPS) do SetOverrideBinding(updater, true, button, bindingName) end
-    else
-        ClearOverrideBindings(updater)
-    end
+    updater:EnableGamePadButton(taken)
 end
 
 local function release()
@@ -130,6 +125,19 @@ updater:SetScript("OnGamePadStick", function(_, stick, x)
     return false
 end)
 
+updater:SetScript("OnGamePadButtonDown", function(_, button)
+    local direction = OffsetKeys.PAD_STEPS[button]
+    if direction and held then startStepping(direction) end
+end)
+
+updater:SetScript("OnGamePadButtonUp", function(_, button)
+    if OffsetKeys.PAD_STEPS[button] then
+        if held then held.direction = nil end
+    else
+        release()   -- the right stick's click let go (or any other button)
+    end
+end)
+
 -- A fight starting: the controller goes back before it's locked.
 updater:RegisterEvent("PLAYER_REGEN_DISABLED")
 updater:SetScript("OnEvent", function()
@@ -145,10 +153,6 @@ function OffsetKeys.Drag(keystate)
 end
 
 function OffsetKeys.Step(direction, keystate)
-    if held and held.drag then   -- the D-pad while Hold & drag is held
-        if keystate == "down" then startStepping(direction) else held.direction = nil end
-        return
-    end
     if keystate ~= "down" then return release() end
     held = {}
     startStepping(direction)

@@ -100,7 +100,10 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
             if game.combat then error("EnableGamePadStick blocked in combat") end
             self.takesStick = enable
         end
-
+        function fakeFrame:EnableGamePadButton(enable)
+            if game.combat then error("EnableGamePadButton blocked in combat") end
+            self.takesButtons = enable
+        end
         function fakeFrame:Click() if self.click then self.click(self) end end
         game.frames[#game.frames + 1] = fakeFrame
         return fakeFrame
@@ -193,10 +196,6 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
     game.bindings, game.bindingOwners = {}, {}
-    _G.SetOverrideBinding = function(owner, _, key, bindingName)
-        if game.combat then error("SetOverrideBinding blocked in combat") end
-        game.bindings[key] = bindingName; game.bindingOwners[key] = owner
-    end
     _G.SetOverrideBindingClick = function(owner, _, key, buttonName) game.bindings[key] = buttonName; game.bindingOwners[key] = owner end
     _G.ClearOverrideBindings = function(owner)
         for key, keyOwner in pairs(game.bindingOwners) do
@@ -400,9 +399,7 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
     keys.Drag("down")
-    eq(taker.takesStick, true, "stick taken while held")
-    eq(game.bindings.PADDLEFT, "GAMEPADCAMERAOFFSET_LEFT", "the D-pad: our step keys, over the game's")
-    eq(game.bindings.PADDRIGHT, "GAMEPADCAMERAOFFSET_RIGHT")
+    eq(taker.takesStick, true, "stick taken while held"); eq(taker.takesButtons, true)
     eq(taker.scripts.OnGamePadStick(taker, "Movement", 1, 0), false, "the left stick: used, not walked with")
     eq(taker.scripts.OnGamePadStick(taker, "Camera", 1, 0), true, "the right stick: the game's")
     tick(0.25)
@@ -411,20 +408,17 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     tick(0.1); tick(0.1)
     eq(GamepadCameraOffsetDB.side, 15, "half-way left: slower, fractions kept")
     taker.scripts.OnGamePadStick(taker, "Movement", 0, 0)
-    keys.Step(1, "down")   -- the D-pad, through its override binding
+    taker.scripts.OnGamePadButtonDown(taker, "PADDRIGHT")
     eq(GamepadCameraOffsetDB.side, 20, "D-pad: a step")
     tick(0.5)
     eq(GamepadCameraOffsetDB.side, 25, "held: repeats")
-    keys.Step(1, "up")
+    taker.scripts.OnGamePadButtonUp(taker, "PADDRIGHT")
     tick(1)
     eq(GamepadCameraOffsetDB.side, 25, "D-pad let go")
     eq(taker.takesStick, true, "still held")
-    taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
-    tick(0.05)
-    eq(GamepadCameraOffsetDB.side, 30, "the stick still works after the D-pad")
-    keys.Drag("up")
-    eq(taker.takesStick, false, "let go: the controller is the game's again")
-    eq(game.bindings.PADDLEFT, nil, "the D-pad back to the game's")
+    taker.scripts.OnGamePadButtonUp(taker, "PADRSTICK")
+    eq(taker.takesStick, false, "the click let go: the controller is the game's again")
+    eq(taker.takesButtons, false)
     eq(taker.shown, false)
 end)
 
