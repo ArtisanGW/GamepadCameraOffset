@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Gamepad Camera Offset
-## Notes: Moves the camera over your shoulder and up, with a controller too. Settings in Options > AddOns > Gamepad Camera Offset, or /gco.
+## Notes: Moves the camera over your shoulder and up, with a controller too. Hold a key and drag to slide it from shoulder to shoulder. Settings in Options > AddOns > Gamepad Camera Offset, or /gco.
 ## Author: Artisan
 ## Version: @project-version@
 #@debug@
