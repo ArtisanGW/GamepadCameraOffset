@@ -15,7 +15,7 @@
 --          stick doesn't walk meanwhile. Both are blocked in combat: there the
 --          mouse works, and the D-pad through CombatDPad.lua. Any other controller button let go ends it, so the
 --          controller can never stay taken.
---   Left / Right: one step each press (STEP_PERCENT); held, it keeps
+--   Left / Right: one step each press (the Step size slider); held, it keeps
 --          going, so a controller button works the same.
 -- Each change goes through the slider's own setting, so the settings page,
 -- the saved value and the camera all follow.
@@ -24,7 +24,6 @@ local Camera = _G.GamepadCameraOffset
 local OffsetKeys = {
     DRAG_PERCENT_PER_SCREEN = 200,  -- dragging across the whole screen: the slider's whole range
     STICK_PERCENT_PER_SECOND = 100, -- the left stick pushed all the way
-    STEP_PERCENT = 10,              -- a Left/Right key or D-pad press
     REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
     STICK = "Movement",             -- the game's name for the left stick
@@ -64,11 +63,17 @@ function OffsetKeys.SetSide(value)
     end
 end
 
+-- The Step size slider, in percent.
+local function stepSize()
+    local percent = tonumber(Camera.GetSettings().stepSize) or Camera.DEFAULTS.stepSize
+    return math.max(Camera.STEP_SIZE_MIN, math.min(Camera.STEP_SIZE_MAX, percent))
+end
+
 local function step(direction)
-    -- Back onto the steps first, so a dragged 37% goes to 40% or 30%.
-    local value = sideValue()
-    local onStep = (direction > 0 and math.ceil or math.floor)(value / OffsetKeys.STEP_PERCENT) * OffsetKeys.STEP_PERCENT
-    OffsetKeys.SetSide(onStep ~= value and onStep or value + direction * OffsetKeys.STEP_PERCENT)
+    -- Back onto the steps first, so a dragged 37% goes to 40% or 20% (at 20%).
+    local value, size = sideValue(), stepSize()
+    local onStep = (direction > 0 and math.ceil or math.floor)(value / size) * size
+    OffsetKeys.SetSide(onStep ~= value and onStep or value + direction * size)
     if held and held.drag then held.value = sideValue() end
 end
 

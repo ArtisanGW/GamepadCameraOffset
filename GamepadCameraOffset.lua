@@ -47,12 +47,15 @@ local Camera = {
     --           own DownScale (0.25).
     --   dragSpeed: 100 (Normal) to 500: how fast the side offset follows the
     --           mouse and the left stick while hold & drag is held (OffsetKeys.lua).
+    --   stepSize: 5 to 50: how far a Left/Right key or a D-pad press moves the
+    --           side offset (OffsetKeys.lua); 20 until you change it.
     -- Every slider starts at the game's own value: nothing changes until you move one.
-    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100 },
+    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100, stepSize = 20 },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
     DRAG_SPEED_MIN = 100, DRAG_SPEED_MAX = 500, DRAG_SPEED_STEP = 25,
+    STEP_SIZE_MIN = 5, STEP_SIZE_MAX = 50, STEP_SIZE_STEP = 5,
     SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
     -- The game's pitch pad works backwards: the lower it is, the more the camera
     -- tilts: 0.125 is the strongest usable tilt, by about 0.75 there's
@@ -317,6 +320,11 @@ function Camera.RegisterSettings()
         .. "• Left stick: at Normal, a full push sweeps it in two seconds",
         sliderOptions(Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DRAG_SPEED_STEP,
             function(value) return Camera.DragSpeedLabel(value) end))
+    addSetting("stepSize", Settings.VarType.Number, "Step size",
+        "How far each step moves the side offset.\n\n"
+        .. "A step is one press of a Left or Right key, or of the D-pad while you hold hold & drag.",
+        sliderOptions(Camera.STEP_SIZE_MIN, Camera.STEP_SIZE_MAX, Camera.STEP_SIZE_STEP,
+            function(value) return string.format("%d%%", math.floor((tonumber(value) or 0) + 0.5)) end))
     if Camera.OffsetKeys then Camera.OffsetKeys.AddButton(layout) end   -- OffsetKeys.lua
     if Camera.AddRelatedAddonButtons then Camera.AddRelatedAddonButtons(layout) end   -- RelatedAddons.lua
     Settings.RegisterAddOnCategory(category)

@@ -402,7 +402,7 @@ test("drag speed: 200% moves the slider twice as far for the same cursor move", 
 end)
 
 test("in a fight: holding hold & drag turns the D-pad into steps, letting go gives it back", function()
-    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, stepSize = 10 })
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
     local combatDPad = GamepadCameraOffset.CombatDPad
     eq(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the hold & drag key goes through the secure button")
@@ -410,7 +410,7 @@ test("in a fight: holding hold & drag turns the D-pad into steps, letting go giv
     combatDPad.dragButton:SecureClick(true)
     eq(game.bindings.PADDRIGHT, "GamepadCameraOffsetStepRight", "D-pad right: a step")
     _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", true)
-    eq(GamepadCameraOffsetDB.side, 10, "stepped in combat: 10%")
+    eq(GamepadCameraOffsetDB.side, 10, "stepped in combat")
     _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", false)
     _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", true)
     _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", false)
@@ -427,6 +427,19 @@ test("out of a fight the secure button leaves the D-pad alone (OffsetKeys takes 
     GamepadCameraOffset.CombatDPad.dragButton:SecureClick(true)
     eq(game.bindings.PADDRIGHT, nil)
     GamepadCameraOffset.CombatDPad.dragButton:SecureClick(false)
+end)
+
+test("step size: a slider, 20% until changed", function()
+    boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    eq(GamepadCameraOffsetDB.stepSize, 20, "default")
+    keys.Step(1, "down"); keys.Step(1, "up")
+    eq(GamepadCameraOffsetDB.side, 20, "a 20% step")
+    set("stepSize", 35)
+    keys.Step(1, "down"); keys.Step(1, "up")
+    eq(GamepadCameraOffsetDB.side, 35, "onto the 35% steps")
+    eq(game.options.stepSize.format(35), "35%")
 end)
 
 test("a Key Bindings button: opens the game's page at AddOns, that section opened up", function()
@@ -458,7 +471,7 @@ local function controllerTaker()
 end
 
 test("hold & drag on a controller: the left stick and the D-pad move it, the stick taken from walking", function()
-    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, stepSize = 10 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
@@ -518,7 +531,7 @@ test("hold & drag: in combat only the mouse; a fight starting gives the controll
 end)
 
 test("left and right keys: a step each press, repeating while held, back onto the steps", function()
-    boot(false, { enabled = true, side = 37, tilt = 0, lookDown = 0 })
+    boot(false, { enabled = true, side = 37, tilt = 0, lookDown = 0, stepSize = 10 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local keys = GamepadCameraOffset.OffsetKeys
     keys.Step(1, "down")
@@ -526,7 +539,7 @@ test("left and right keys: a step each press, repeating while held, back onto th
     tick(0.3)
     eq(GamepadCameraOffsetDB.side, 40, "not yet repeating")
     tick(0.2)
-    eq(GamepadCameraOffsetDB.side, 50, "held: repeats, 10% a step")
+    eq(GamepadCameraOffsetDB.side, 50, "held: repeats")
     tick(0.1)
     eq(GamepadCameraOffsetDB.side, 60)
     keys.Step(1, "up")
