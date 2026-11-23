@@ -8,7 +8,7 @@
 - None is bound until you bind it
 - A Key Bindings button on the settings page opens them
 
-Thanks to the player on CurseForge who suggested it: an excellent idea.
+Thanks to stozeel on CurseForge for suggesting it: an excellent idea.
 
 ## 1.0.1
 
