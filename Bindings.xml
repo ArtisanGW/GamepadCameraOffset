@@ -1,0 +1,12 @@
+<!-- Keys for the side offset, in Options > Key Bindings > AddOns (OffsetKeys.lua). -->
+<Bindings>
+	<Binding name="GAMEPADCAMERAOFFSET_DRAG" category="ADDONS" runOnUp="true">
+		GamepadCameraOffset.OffsetKeys.Drag(keystate)
+	</Binding>
+	<Binding name="GAMEPADCAMERAOFFSET_LEFT" category="ADDONS" runOnUp="true">
+		GamepadCameraOffset.OffsetKeys.Step(-1, keystate)
+	</Binding>
+	<Binding name="GAMEPADCAMERAOFFSET_RIGHT" category="ADDONS" runOnUp="true">
+		GamepadCameraOffset.OffsetKeys.Step(1, keystate)
+	</Binding>
+</Bindings>

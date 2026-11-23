@@ -13,6 +13,7 @@
 ## IconTexture: Interface\AddOns\GamepadCameraOffset\Media\icon-64.png
 
 GamepadCameraOffset.lua
+OffsetKeys.lua
 Popup.lua
 RelatedAddons.lua
 #@do-not-package@

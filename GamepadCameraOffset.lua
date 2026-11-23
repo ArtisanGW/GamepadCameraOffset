@@ -256,6 +256,7 @@ function Camera.RegisterSettings()
     local settings = getSettings()
     local category, layout = Settings.RegisterVerticalLayoutCategory("Gamepad Camera Offset")
     Camera.category = category
+    Camera.sliderSettings = {}
 
     local function addSetting(key, valueType, label, tooltip, options)
         local variableName = "GamepadCameraOffset_" .. key
@@ -265,6 +266,7 @@ function Camera.RegisterSettings()
         if valueType == Settings.VarType.Boolean then
             Settings.CreateCheckbox(category, setting, tooltip)
         else
+            Camera.sliderSettings[key] = setting   -- OffsetKeys.lua moves the side slider
             Settings.CreateSlider(category, setting, options, tooltip)
         end
     end
@@ -278,7 +280,8 @@ function Camera.RegisterSettings()
         "Moves the camera over your right or left shoulder.\n\n"
         .. "• Centered: the game's normal view\n"
         .. "• 100%: the furthest it goes\n\n"
-        .. "The effect is stronger when you zoom in.",
+        .. "The effect is stronger when you zoom in.\n\n"
+        .. "Keys can move it too, in Key Bindings > AddOns.",
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
     addSetting("tilt", Settings.VarType.Number, "Tilt",

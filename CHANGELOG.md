@@ -1,5 +1,12 @@
 # Gamepad Camera Offset
 
+## 1.1.0
+
+- Keys for the side offset, in Key Bindings > AddOns:
+  - Hold one (a mouse button too, like the middle one) and move the mouse left or right
+  - Or step it left and right; held, it keeps going (works on a controller)
+- None is bound until you bind it
+
 ## 1.0.1
 
 - New icon: a tauren with horns, hair and a cape, seen from behind

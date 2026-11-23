@@ -105,6 +105,8 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         RegisterAddOnSetting = function(cat, variable, key, tbl, kind, label, def)
             if tbl[key] == nil then tbl[key] = def end
             local s = { variable = variable, key = key, tbl = tbl }
+            -- As the game's: saved in the table, then its callback.
+            function s:SetValue(value) self.tbl[self.key] = value; game.callbacks[self.variable](nil, self, value) end
             game.settings[variable] = s
             return s
         end,
@@ -124,7 +126,10 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         OpenToCategory = function(id) game.opened = id end,
     }
     _G.SlashCmdList = {}
-    _G.UIParent = { GetHeight = function() return 768 end }
+    _G.UIParent = { GetHeight = function() return 768 end, GetEffectiveScale = function() return 2 end }
+    game.cursorX = 500
+    _G.GetCursorPosition = function() return game.cursorX, 300 end
+    _G.GetScreenWidth = function() return 1000 end   -- 2000 pixels at scale 2
     game.zoom = 10
     _G.GetCameraZoom = function() return game.zoom end
     _G.GetCursorCenterPosition = function() return 0, 480 end
@@ -194,6 +199,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.print = function(t) printed[#printed + 1] = t end
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
@@ -310,6 +316,63 @@ test("sliders apply at once; tilt Off turns the pitch off", function()
     eq(get("test_cameraDynamicPitch"), "0")
     set("side", 999)
     eq(get("test_cameraOverShoulder"), "3", "clamped")
+end)
+
+-- The updater frame of OffsetKeys.lua: its OnUpdate run once, elapsed seconds later.
+local function tick(elapsed)
+    for _, fakeFrame in ipairs(game.frames) do
+        if fakeFrame.update and fakeFrame.shown then fakeFrame.update(fakeFrame, elapsed) end
+    end
+end
+
+test("keys move the side offset: in Key Bindings > AddOns, none bound", function()
+    local bindings = assert(io.open("Bindings.xml")):read("*a")
+    for _, name in ipairs({ "DRAG", "LEFT", "RIGHT" }) do
+        assert(bindings:find('name="GAMEPADCAMERAOFFSET_' .. name .. '" category="ADDONS" runOnUp="true"', 1, true), name)
+    end
+    assert(not bindings:find("default="), "no key bound by default")
+    boot(false, nil)
+    eq(BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG, "Camera side: hold, drag")
+end)
+
+test("held drag key: moving the mouse moves the slider, the whole screen its whole range", function()
+    boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    keys.Drag("down")
+    game.cursorX = 500 + 500   -- a quarter of the 2000-pixel screen to the right
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
+    eq(get("test_cameraOverShoulder"), "1.5", "the camera follows")
+    game.cursorX = 500 - 2000
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, -100, "clamped")
+    keys.Drag("up")
+    game.cursorX = 500
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, -100, "let go: stays")
+end)
+
+test("left and right keys: a step each press, repeating while held, back onto the steps", function()
+    boot(false, { enabled = true, side = 37, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    keys.Step(1, "down")
+    eq(GamepadCameraOffsetDB.side, 40, "37 onto the next step")
+    tick(0.3)
+    eq(GamepadCameraOffsetDB.side, 40, "not yet repeating")
+    tick(0.2)
+    eq(GamepadCameraOffsetDB.side, 45, "held: repeats")
+    tick(0.1)
+    eq(GamepadCameraOffsetDB.side, 50)
+    keys.Step(1, "up")
+    tick(1)
+    eq(GamepadCameraOffsetDB.side, 50, "let go: stops")
+    keys.Step(-1, "down"); keys.Step(-1, "up")
+    eq(GamepadCameraOffsetDB.side, 45)
+    GamepadCameraOffsetDB.side = 100
+    keys.Step(1, "down"); keys.Step(1, "up")
+    eq(GamepadCameraOffsetDB.side, 100, "never past 100%")
 end)
 
 test("disabling puts the game's camera back: controller temp values, else none", function()
@@ -512,7 +575,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,OffsetKeys.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
