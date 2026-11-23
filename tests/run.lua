@@ -379,10 +379,7 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     tick(0.016)
     eq(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
     eq(get("test_cameraOverShoulder"), "1.5", "the camera follows")
-    game.cursorX = 1000 - 1000   -- back past the center in one move
-    tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 0, "stops at the center")
-    game.cursorX = 0 - 2000
+    game.cursorX = 500 - 2000
     tick(0.016)
     eq(GamepadCameraOffsetDB.side, -100, "clamped")
     keys.Drag("up")
@@ -502,8 +499,8 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     eq(taker.shown, false)
 end)
 
-test("hold & drag stops at the center for a moment, with a buzz on the controller", function()
-    boot(true, { enabled = true, side = 30, tilt = 0, lookDown = 0 })
+test("Stop at center on: hold & drag stops there for a moment, with a buzz on the controller", function()
+    boot(true, { enabled = true, side = 30, tilt = 0, lookDown = 0, centerHold = true })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
     local vibrations = {}
     _G.C_GamePad = { SetVibration = function(kind) vibrations[#vibrations + 1] = kind end, StopVibration = function() end }
@@ -521,6 +518,26 @@ test("hold & drag stops at the center for a moment, with a buzz on the controlle
     eq(#vibrations, 1, "one buzz")
     keys.Drag("up")
     _G.C_GamePad = nil
+end)
+
+test("Stop at center: off until you turn it on, then a drag past the center stops there", function()
+    boot(false, { enabled = true, side = 50, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    eq(GamepadCameraOffsetDB.centerHold, false, "off for new players")
+    local keys = GamepadCameraOffset.OffsetKeys
+    game.cursorX = 500
+    keys.Drag("down")
+    game.cursorX = 500 - 1000   -- half the screen left: 100%
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, -50, "off: straight through the center")
+    keys.Drag("up")
+    set("centerHold", true)
+    game.cursorX = 500
+    keys.Drag("down")
+    game.cursorX = 500 + 1000
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, 0, "on: stops at the center")
+    keys.Drag("up")
 end)
 
 test("hold & drag starting at the center leaves it at once", function()

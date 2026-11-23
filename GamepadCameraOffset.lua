@@ -47,10 +47,12 @@ local Camera = {
     --           own DownScale (0.25).
     --   dragSpeed: 100 (Normal) to 500: how fast the side offset follows the
     --           mouse and the left stick while hold & drag is held (OffsetKeys.lua).
+    --   centerHold: hold & drag stops at the center for a moment (OffsetKeys.lua); off
+    --           until you turn it on, as every option.
     --   stepSize: 5 to 50: how far a Left/Right key or a D-pad press moves the
     --           side offset (OffsetKeys.lua); 20 until you change it.
     -- Every slider starts at the game's own value: nothing changes until you move one.
-    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100, stepSize = 20 },
+    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100, stepSize = 20, centerHold = false },
     SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
@@ -320,6 +322,9 @@ function Camera.RegisterSettings()
         .. "• Left stick: at Normal, a full push sweeps it in two seconds",
         sliderOptions(Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DRAG_SPEED_STEP,
             function(value) return Camera.DragSpeedLabel(value) end))
+    addSetting("centerHold", Settings.VarType.Boolean, "Stop at center",
+        "Hold & drag stops at the center for a moment, so you know it's centered.\n\n"
+        .. "On a controller, it also gives a short buzz.")
     addSetting("stepSize", Settings.VarType.Number, "Step size",
         "How far each step moves the side offset.\n\n"
         .. "A step is one press of a Left or Right key, or of the D-pad while you hold hold & drag.",

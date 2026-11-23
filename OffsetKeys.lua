@@ -125,8 +125,8 @@ local function centerFeedback()
     end
 end
 
--- A drag's move (in percent before Drag speed). Reaching or crossing the center
--- stops there, and it stays until CENTER_HOLD_PERCENT more is moved (either way),
+-- A drag's move (in percent before Drag speed). With Stop at center on, reaching
+-- or crossing the center stops there, and it stays until CENTER_HOLD_PERCENT more is moved (either way),
 -- so you feel it's centered; at any Drag speed the hold feels the same.
 local function dragBy(moved)
     if held.centerHold then
@@ -137,7 +137,8 @@ local function dragBy(moved)
     end
     local before = held.value
     local after = clampSide(before + moved * dragSpeed())
-    if before ~= 0 and (after == 0 or (before > 0) ~= (after > 0)) then
+    local centerHoldOn = Camera.GetSettings().centerHold == true   -- the Stop at center checkbox
+    if centerHoldOn and before ~= 0 and (after == 0 or (before > 0) ~= (after > 0)) then
         after = 0
         held.centerHold = OffsetKeys.CENTER_HOLD_PERCENT
         centerFeedback()
