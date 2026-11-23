@@ -24,7 +24,7 @@ BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG = "Camera side: hold & drag"
 BINDING_NAME_GAMEPADCAMERAOFFSET_LEFT = "Camera side: left"
 BINDING_NAME_GAMEPADCAMERAOFFSET_RIGHT = "Camera side: right"
 
-local held      -- the key held now: { drag = true, startX, startValue } or { direction, untilNext }
+local held      -- the key held now: { drag = true, lastX, value } or { direction, untilNext }
 local updater = CreateFrame("Frame")
 updater:Hide()
 
@@ -32,9 +32,13 @@ local function sideValue()
     return tonumber(Camera.GetSettings().side) or Camera.DEFAULTS.side
 end
 
+local function clampSide(value)
+    return math.max(Camera.SIDE_MIN, math.min(Camera.SIDE_MAX, value))
+end
+
 -- Sets the slider's value (clamped, whole percent) as the settings page would.
 function OffsetKeys.SetSide(value)
-    value = math.floor(math.max(Camera.SIDE_MIN, math.min(Camera.SIDE_MAX, value)) + 0.5)
+    value = math.floor(clampSide(value) + 0.5)
     if value == sideValue() then return end
     local setting = Camera.sliderSettings and Camera.sliderSettings.side
     if setting and setting.SetValue then
@@ -75,8 +79,16 @@ end
 updater:SetScript("OnUpdate", function(_, elapsed)
     if not held then return release() end
     if held.drag then
-        local moved = (cursorX() - held.startX) / screenWidth()
-        OffsetKeys.SetSide(held.startValue + moved * OffsetKeys.DRAG_PERCENT_PER_SCREEN * dragSpeed())
+        -- Each frame's move, added to a value kept inside the slider's range: at the
+        -- end, turning back moves it at once (from the start position, the cursor
+        -- had to come all the way back first, which at a high Drag speed looked stuck).
+        local x = cursorX()
+        local moved = (x - held.lastX) / screenWidth()
+        held.lastX = x
+        if moved ~= 0 then
+            held.value = clampSide(held.value + moved * OffsetKeys.DRAG_PERCENT_PER_SCREEN * dragSpeed())
+            OffsetKeys.SetSide(held.value)
+        end
     else
         held.untilNext = held.untilNext - elapsed
         if held.untilNext <= 0 then
@@ -89,7 +101,7 @@ end)
 -- Bindings.xml: keystate is "down" or "up" (runOnUp).
 function OffsetKeys.Drag(keystate)
     if keystate ~= "down" then return release() end
-    held = { drag = true, startX = cursorX(), startValue = sideValue() }
+    held = { drag = true, lastX = cursorX(), value = sideValue() }
     updater:Show()
 end
 
