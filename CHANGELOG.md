@@ -1,5 +1,10 @@
 # Gamepad Camera Offset
 
+## 1.2.0
+
+- Hold & drag works on a controller: bind it to the right stick's click, then move the side offset with the left stick or the D-pad
+- While it's held, the left stick moves the camera, not your character (outside combat; in a fight only the mouse works)
+
 ## 1.1.0
 
 - Keys for the side offset, in Key Bindings > AddOns:
