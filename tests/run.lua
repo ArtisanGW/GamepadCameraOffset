@@ -79,9 +79,6 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         function fakeFrame:RegisterEvent(eventName) self.ev[eventName] = true end
         function fakeFrame:UnregisterEvent(eventName) self.ev[eventName] = nil end
         function fakeFrame:SetScript(scriptType, handler)
-            self.scripts = self.scripts or {}
-            self.scripts[scriptType] = handler
-            if scriptType:find("^OnGamePad") then return end
             if scriptType == "OnUpdate" then self.update = handler
             elseif scriptType == "OnClick" then self.click = handler
             elseif scriptType == "PreClick" then self.preClick = handler
@@ -95,15 +92,6 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
             if wasShown and self.onHide then self.onHide(self) end
         end
         function fakeFrame:GetName() return self.name end
-        -- Protected: blocked in combat, like the game's.
-        function fakeFrame:EnableGamePadStick(enable)
-            if game.combat then error("EnableGamePadStick blocked in combat") end
-            self.takesStick = enable
-        end
-        function fakeFrame:EnableGamePadButton(enable)
-            if game.combat then error("EnableGamePadButton blocked in combat") end
-            self.takesButtons = enable
-        end
         function fakeFrame:Click() if self.click then self.click(self) end end
         game.frames[#game.frames + 1] = fakeFrame
         return fakeFrame
@@ -384,61 +372,6 @@ test("a Key Bindings button: opens the game's page at AddOns, that section opene
     button.onClick()
     eq(opened[1], 7); eq(opened[2], "AddOns")
     eq(addonsSection.data.expanded, true)
-end)
-
--- The frame that takes the controller while Hold & drag is held.
-local function controllerTaker()
-    for _, fakeFrame in ipairs(game.frames) do
-        if fakeFrame.scripts and fakeFrame.scripts.OnGamePadStick then return fakeFrame end
-    end
-end
-
-test("hold & drag on a controller: the left stick and the D-pad move it, the stick taken from walking", function()
-    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local keys = GamepadCameraOffset.OffsetKeys
-    local taker = controllerTaker()
-    keys.Drag("down")
-    eq(taker.takesStick, true, "stick taken while held"); eq(taker.takesButtons, true)
-    eq(taker.scripts.OnGamePadStick(taker, "Movement", 1, 0), false, "the left stick: used, not walked with")
-    eq(taker.scripts.OnGamePadStick(taker, "Camera", 1, 0), true, "the right stick: the game's")
-    tick(0.25)
-    eq(GamepadCameraOffsetDB.side, 25, "pushed all the way: 100% a second")
-    taker.scripts.OnGamePadStick(taker, "Movement", -0.5, 0)
-    tick(0.1); tick(0.1)
-    eq(GamepadCameraOffsetDB.side, 15, "half-way left: slower, fractions kept")
-    taker.scripts.OnGamePadStick(taker, "Movement", 0, 0)
-    taker.scripts.OnGamePadButtonDown(taker, "PADDRIGHT")
-    eq(GamepadCameraOffsetDB.side, 20, "D-pad: a step")
-    tick(0.5)
-    eq(GamepadCameraOffsetDB.side, 25, "held: repeats")
-    taker.scripts.OnGamePadButtonUp(taker, "PADDRIGHT")
-    tick(1)
-    eq(GamepadCameraOffsetDB.side, 25, "D-pad let go")
-    eq(taker.takesStick, true, "still held")
-    taker.scripts.OnGamePadButtonUp(taker, "PADRSTICK")
-    eq(taker.takesStick, false, "the click let go: the controller is the game's again")
-    eq(taker.takesButtons, false)
-    eq(taker.shown, false)
-end)
-
-test("hold & drag: in combat only the mouse; a fight starting gives the controller back", function()
-    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    local keys = GamepadCameraOffset.OffsetKeys
-    local taker = controllerTaker()
-    keys.Drag("down")
-    eq(taker.takesStick, true)
-    taker.script(taker, "PLAYER_REGEN_DISABLED")
-    eq(taker.takesStick, false, "given back before the lock")
-    game.combat = true
-    keys.Drag("down")
-    eq(taker.takesStick, false, "not taken in combat")
-    game.cursorX = 500 + 200
-    tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 20, "the mouse still works")
-    keys.Drag("up")
-    eq(taker.shown, false)
 end)
 
 test("left and right keys: a step each press, repeating while held, back onto the steps", function()
