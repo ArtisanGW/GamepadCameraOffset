@@ -3,7 +3,7 @@
 ## 1.2.0
 
 - Hold & drag works on a controller: bind it to the right stick's click, then move the side offset with the left stick or the D-pad
-- While it's held, the left stick moves the camera, not your character (outside combat; in a fight only the mouse works)
+- While it's held, the left stick moves the camera, not your character; in a fight, the D-pad's left and right step it instead
 - A Drag speed slider: how fast hold & drag moves the side offset, with the mouse or the left stick
 
 ## 1.1.0

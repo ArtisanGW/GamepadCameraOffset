@@ -260,6 +260,8 @@ function Debug.Command(arguments)
     elseif arguments == "last" then
         local runs = getDebugStore().runs
         Debug.PrintRun(runs[#runs])
+    elseif arguments == "pad" and Camera.DebugPadProbe then
+        Camera.DebugPadProbe.Start()
     elseif arguments == "keys" and Camera.DebugKeys then
         Camera.DebugKeys.Toggle()
     elseif arguments == "clear" then

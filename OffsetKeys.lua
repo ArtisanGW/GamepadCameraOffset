@@ -12,10 +12,10 @@
 --          The stick and the D-pad are taken from the game only while it's held
 --          (EnableGamePadStick / EnableGamePadButton, as the game's soft cursor
 --          does, Blizzard_GamepadSoftCursor/SoftCursor.lua:25), so the left
---          stick doesn't walk meanwhile. Both are blocked in combat: there only
---          the mouse works. Any other controller button let go ends it, so the
+--          stick doesn't walk meanwhile. Both are blocked in combat: there the
+--          mouse works, and the D-pad through CombatDPad.lua. Any other controller button let go ends it, so the
 --          controller can never stay taken.
---   Left / Right: one step each press (the slider's step); held, it keeps
+--   Left / Right: one step each press (STEP_PERCENT); held, it keeps
 --          going, so a controller button works the same.
 -- Each change goes through the slider's own setting, so the settings page,
 -- the saved value and the camera all follow.
@@ -24,6 +24,7 @@ local Camera = _G.GamepadCameraOffset
 local OffsetKeys = {
     DRAG_PERCENT_PER_SCREEN = 200,  -- dragging across the whole screen: the slider's whole range
     STICK_PERCENT_PER_SECOND = 100, -- the left stick pushed all the way
+    STEP_PERCENT = 10,              -- a Left/Right key or D-pad press
     REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
     STICK = "Movement",             -- the game's name for the left stick
@@ -64,10 +65,10 @@ function OffsetKeys.SetSide(value)
 end
 
 local function step(direction)
-    -- Back onto the slider's steps first, so a dragged 37% goes to 40% or 35%.
+    -- Back onto the steps first, so a dragged 37% goes to 40% or 30%.
     local value = sideValue()
-    local onStep = (direction > 0 and math.ceil or math.floor)(value / Camera.SIDE_STEP) * Camera.SIDE_STEP
-    OffsetKeys.SetSide(onStep ~= value and onStep or value + direction * Camera.SIDE_STEP)
+    local onStep = (direction > 0 and math.ceil or math.floor)(value / OffsetKeys.STEP_PERCENT) * OffsetKeys.STEP_PERCENT
+    OffsetKeys.SetSide(onStep ~= value and onStep or value + direction * OffsetKeys.STEP_PERCENT)
     if held and held.drag then held.value = sideValue() end
 end
 
@@ -159,9 +160,15 @@ function OffsetKeys.Drag(keystate)
     if not InCombatLockdown() then setControllerTaken(true) end
 end
 
+-- While hold & drag is held (CombatDPad.lua's D-pad in a fight), a step
+-- leaves it held.
 function OffsetKeys.Step(direction, keystate)
-    if keystate ~= "down" then return release() end
-    held = {}
+    local dragHeld = held and held.drag
+    if keystate ~= "down" then
+        if dragHeld then held.direction = nil; return end
+        return release()
+    end
+    if not dragHeld then held = {} end
     startStepping(direction)
     updater:Show()
 end

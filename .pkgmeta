@@ -9,6 +9,8 @@ ignore:
   - Debug.lua
   # watches hold & drag on screen (dev builds only)
   - DebugKeys.lua
+  # checks whether controller override bindings reach the addon (dev builds only)
+  - DebugPadProbe.lua
   # the icon's source and its CurseForge size; the game uses Media/icon-64.png
   - Media/icon.svg
   - Media/icon-400.png

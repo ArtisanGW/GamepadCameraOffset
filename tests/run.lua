@@ -105,6 +105,25 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
             self.takesButtons = enable
         end
         function fakeFrame:Click() if self.click then self.click(self) end end
+        function fakeFrame:HookScript(scriptType, handler)
+            self.hooks = self.hooks or {}
+            self.hooks[scriptType] = handler
+        end
+        -- A secure click (SecureHandlerClickTemplate): its _onclick snippet run with
+        -- the restricted environment's few functions, then the hook.
+        function fakeFrame:SecureClick(down)
+            local snippet = self.attributes and self.attributes._onclick
+            if snippet then
+                local handle = {
+                    SetBindingClick = function(_, _, key, buttonName) game.bindings[key] = buttonName; game.bindingOwners[key] = self end,
+                    ClearBindings = function() _G.ClearOverrideBindings(self) end,
+                }
+                local run = assert(loadstring("local self, button, down = ...\n" .. snippet))
+                setfenv(run, { PlayerInCombat = function() return game.combat end })
+                run(handle, "LeftButton", down)
+            end
+            if self.hooks and self.hooks.OnClick then self.hooks.OnClick(self, "LeftButton", down) end
+        end
         game.frames[#game.frames + 1] = fakeFrame
         return fakeFrame
     end
@@ -196,6 +215,8 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     game.combat = false
     _G.InCombatLockdown = function() return game.combat end
     game.bindings, game.bindingOwners = {}, {}
+    game.dragKeys = { "BUTTON3" }
+    _G.GetBindingKey = function() return unpack(game.dragKeys) end
     _G.SetOverrideBindingClick = function(owner, _, key, buttonName) game.bindings[key] = buttonName; game.bindingOwners[key] = owner end
     _G.ClearOverrideBindings = function(owner)
         for key, keyOwner in pairs(game.bindingOwners) do
@@ -212,6 +233,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", ns)
     if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
@@ -379,6 +401,34 @@ test("drag speed: 200% moves the slider twice as far for the same cursor move", 
     eq(GamepadCameraOffsetDB.dragSpeed, 200)
 end)
 
+test("in a fight: holding hold & drag turns the D-pad into steps, letting go gives it back", function()
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local combatDPad = GamepadCameraOffset.CombatDPad
+    eq(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the hold & drag key goes through the secure button")
+    game.combat = true
+    combatDPad.dragButton:SecureClick(true)
+    eq(game.bindings.PADDRIGHT, "GamepadCameraOffsetStepRight", "D-pad right: a step")
+    _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", true)
+    eq(GamepadCameraOffsetDB.side, 10, "stepped in combat: 10%")
+    _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", false)
+    _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", true)
+    _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", false)
+    eq(GamepadCameraOffsetDB.side, 0, "and back")
+    combatDPad.dragButton:SecureClick(false)
+    eq(game.bindings.PADDRIGHT, nil, "let go: the D-pad is the game's again")
+    eq(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the key's route stays")
+    game.combat = false
+end)
+
+test("out of a fight the secure button leaves the D-pad alone (OffsetKeys takes it)", function()
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    GamepadCameraOffset.CombatDPad.dragButton:SecureClick(true)
+    eq(game.bindings.PADDRIGHT, nil)
+    GamepadCameraOffset.CombatDPad.dragButton:SecureClick(false)
+end)
+
 test("a Key Bindings button: opens the game's page at AddOns, that section opened up", function()
     local addonsSection = { GetName = function() return "AddOns" end, data = {} }
     local opened
@@ -425,10 +475,10 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     taker.scripts.OnGamePadButtonDown(taker, "PADDRIGHT")
     eq(GamepadCameraOffsetDB.side, 20, "D-pad: a step")
     tick(0.5)
-    eq(GamepadCameraOffsetDB.side, 25, "held: repeats")
+    eq(GamepadCameraOffsetDB.side, 30, "held: repeats")
     taker.scripts.OnGamePadButtonUp(taker, "PADDRIGHT")
     tick(1)
-    eq(GamepadCameraOffsetDB.side, 25, "D-pad let go")
+    eq(GamepadCameraOffsetDB.side, 30, "D-pad let go")
     eq(taker.takesStick, true, "still held")
     taker.scripts.OnGamePadButtonUp(taker, "PADRSTICK")
     eq(taker.takesStick, false, "the click let go: the controller is the game's again")
@@ -476,14 +526,14 @@ test("left and right keys: a step each press, repeating while held, back onto th
     tick(0.3)
     eq(GamepadCameraOffsetDB.side, 40, "not yet repeating")
     tick(0.2)
-    eq(GamepadCameraOffsetDB.side, 45, "held: repeats")
+    eq(GamepadCameraOffsetDB.side, 50, "held: repeats, 10% a step")
     tick(0.1)
-    eq(GamepadCameraOffsetDB.side, 50)
+    eq(GamepadCameraOffsetDB.side, 60)
     keys.Step(1, "up")
     tick(1)
-    eq(GamepadCameraOffsetDB.side, 50, "let go: stops")
+    eq(GamepadCameraOffsetDB.side, 60, "let go: stops")
     keys.Step(-1, "down"); keys.Step(-1, "up")
-    eq(GamepadCameraOffsetDB.side, 45)
+    eq(GamepadCameraOffsetDB.side, 50)
     GamepadCameraOffsetDB.side = 100
     keys.Step(1, "down"); keys.Step(1, "up")
     eq(GamepadCameraOffsetDB.side, 100, "never past 100%")
@@ -689,7 +739,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,OffsetKeys.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
