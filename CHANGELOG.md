@@ -1,5 +1,9 @@
 # Gamepad Camera Offset
 
+## 1.2.0
+
+- A Drag speed slider: the side offset follows the cursor faster while you hold the hold & drag key (handy with a controller stick acting as a mouse)
+
 ## 1.1.0
 
 - Keys for the side offset, in Key Bindings > AddOns:

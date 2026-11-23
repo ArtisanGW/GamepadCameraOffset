@@ -57,6 +57,12 @@ local function cursorX()
     return x
 end
 
+-- The Drag speed slider, as a multiplier (1 = Normal).
+local function dragSpeed()
+    local percent = tonumber(Camera.GetSettings().dragSpeed) or Camera.DEFAULTS.dragSpeed
+    return math.max(Camera.DRAG_SPEED_MIN, math.min(Camera.DRAG_SPEED_MAX, percent)) / 100
+end
+
 local function screenWidth()
     return GetScreenWidth() * UIParent:GetEffectiveScale()
 end
@@ -70,7 +76,7 @@ updater:SetScript("OnUpdate", function(_, elapsed)
     if not held then return release() end
     if held.drag then
         local moved = (cursorX() - held.startX) / screenWidth()
-        OffsetKeys.SetSide(held.startValue + moved * OffsetKeys.DRAG_PERCENT_PER_SCREEN)
+        OffsetKeys.SetSide(held.startValue + moved * OffsetKeys.DRAG_PERCENT_PER_SCREEN * dragSpeed())
     else
         held.untilNext = held.untilNext - elapsed
         if held.untilNext <= 0 then
