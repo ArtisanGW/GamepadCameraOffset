@@ -3,9 +3,18 @@
 -- binding under the section named by that global, forever branch
 -- Blizzard_SettingsDefinitions_Frame/Keybindings.lua:219-252). None is bound
 -- until you bind it.
---   Drag:  hold it and move the mouse left or right (a mouse button works too,
---          like the middle one); the whole screen's width sweeps the slider
---          from 100% left to 100% right.
+--   Hold & drag: while it's held (a mouse button works too, like the middle
+--          one; on a controller, the right stick's click):
+--          • the mouse left or right: the whole screen's width sweeps the
+--            slider from 100% left to 100% right;
+--          • the left stick: the further it's pushed, the faster it goes;
+--          • the D-pad's left and right: a step each press, like the keys below.
+--          The stick and the D-pad are taken from the game only while it's held
+--          (EnableGamePadStick / EnableGamePadButton, as the game's soft cursor
+--          does, Blizzard_GamepadSoftCursor/SoftCursor.lua:25), so the left
+--          stick doesn't walk meanwhile. Both are blocked in combat: there only
+--          the mouse works. Any other controller button let go ends it, so the
+--          controller can never stay taken.
 --   Left / Right: one step each press (the slider's step); held, it keeps
 --          going, so a controller button works the same.
 -- Each change goes through the slider's own setting, so the settings page,
@@ -14,8 +23,11 @@ local Camera = _G.GamepadCameraOffset
 
 local OffsetKeys = {
     DRAG_PERCENT_PER_SCREEN = 200,  -- dragging across the whole screen: the slider's whole range
-    REPEAT_DELAY = 0.4,             -- seconds a held Left/Right waits before it repeats
+    STICK_PERCENT_PER_SECOND = 100, -- the left stick pushed all the way
+    REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
+    STICK = "Movement",             -- the game's name for the left stick
+    PAD_STEPS = { PADDLEFT = -1, PADDRIGHT = 1 },
 }
 Camera.OffsetKeys = OffsetKeys
 
@@ -24,7 +36,9 @@ BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG = "Camera side: hold & drag"
 BINDING_NAME_GAMEPADCAMERAOFFSET_LEFT = "Camera side: left"
 BINDING_NAME_GAMEPADCAMERAOFFSET_RIGHT = "Camera side: right"
 
-local held      -- the key held now: { drag = true, startX, startValue } or { direction, untilNext }
+-- The key held now: { drag, value, lastX, stickX, controllerTaken } for Hold & drag;
+-- { direction, untilNext } while a step repeats (either key).
+local held
 local updater = CreateFrame("Frame")
 updater:Hide()
 
@@ -32,9 +46,13 @@ local function sideValue()
     return tonumber(Camera.GetSettings().side) or Camera.DEFAULTS.side
 end
 
+local function clampSide(value)
+    return math.max(Camera.SIDE_MIN, math.min(Camera.SIDE_MAX, value))
+end
+
 -- Sets the slider's value (clamped, whole percent) as the settings page would.
 function OffsetKeys.SetSide(value)
-    value = math.floor(math.max(Camera.SIDE_MIN, math.min(Camera.SIDE_MAX, value)) + 0.5)
+    value = math.floor(clampSide(value) + 0.5)
     if value == sideValue() then return end
     local setting = Camera.sliderSettings and Camera.sliderSettings.side
     if setting and setting.SetValue then
@@ -50,18 +68,31 @@ local function step(direction)
     local value = sideValue()
     local onStep = (direction > 0 and math.ceil or math.floor)(value / Camera.SIDE_STEP) * Camera.SIDE_STEP
     OffsetKeys.SetSide(onStep ~= value and onStep or value + direction * Camera.SIDE_STEP)
+    if held and held.drag then held.value = sideValue() end
+end
+
+-- A step now, then again and again while held.
+local function startStepping(direction)
+    step(direction)
+    held.direction, held.untilNext = direction, OffsetKeys.REPEAT_DELAY
 end
 
 local function cursorX()
-    local x = GetCursorPosition()
-    return x
+    return (GetCursorPosition())
 end
 
 local function screenWidth()
     return GetScreenWidth() * UIParent:GetEffectiveScale()
 end
 
+local function setControllerTaken(taken)
+    if held then held.controllerTaken = taken end
+    updater:EnableGamePadStick(taken)
+    updater:EnableGamePadButton(taken)
+end
+
 local function release()
+    if held and held.controllerTaken and not InCombatLockdown() then setControllerTaken(false) end
     held = nil
     updater:Hide()
 end
@@ -69,9 +100,16 @@ end
 updater:SetScript("OnUpdate", function(_, elapsed)
     if not held then return release() end
     if held.drag then
-        local moved = (cursorX() - held.startX) / screenWidth()
-        OffsetKeys.SetSide(held.startValue + moved * OffsetKeys.DRAG_PERCENT_PER_SCREEN)
-    else
+        local x = cursorX()
+        local moved = (x - held.lastX) / screenWidth() * OffsetKeys.DRAG_PERCENT_PER_SCREEN
+            + held.stickX * OffsetKeys.STICK_PERCENT_PER_SECOND * elapsed
+        held.lastX = x
+        if moved ~= 0 then
+            held.value = clampSide(held.value + moved)
+            OffsetKeys.SetSide(held.value)
+        end
+    end
+    if held.direction then
         held.untilNext = held.untilNext - elapsed
         if held.untilNext <= 0 then
             held.untilNext = OffsetKeys.REPEAT_INTERVAL
@@ -80,17 +118,44 @@ updater:SetScript("OnUpdate", function(_, elapsed)
     end
 end)
 
+-- The left stick while Hold & drag is held; the other sticks go on to the game.
+updater:SetScript("OnGamePadStick", function(_, stick, x)
+    if stick ~= OffsetKeys.STICK or not held then return true end
+    held.stickX = x or 0
+    return false
+end)
+
+updater:SetScript("OnGamePadButtonDown", function(_, button)
+    local direction = OffsetKeys.PAD_STEPS[button]
+    if direction and held then startStepping(direction) end
+end)
+
+updater:SetScript("OnGamePadButtonUp", function(_, button)
+    if OffsetKeys.PAD_STEPS[button] then
+        if held then held.direction = nil end
+    else
+        release()   -- the right stick's click let go (or any other button)
+    end
+end)
+
+-- A fight starting: the controller goes back before it's locked.
+updater:RegisterEvent("PLAYER_REGEN_DISABLED")
+updater:SetScript("OnEvent", function()
+    if held and held.controllerTaken then release() end
+end)
+
 -- Bindings.xml: keystate is "down" or "up" (runOnUp).
 function OffsetKeys.Drag(keystate)
     if keystate ~= "down" then return release() end
-    held = { drag = true, startX = cursorX(), startValue = sideValue() }
+    held = { drag = true, value = sideValue(), lastX = cursorX(), stickX = 0 }
     updater:Show()
+    if not InCombatLockdown() then setControllerTaken(true) end
 end
 
 function OffsetKeys.Step(direction, keystate)
     if keystate ~= "down" then return release() end
-    step(direction)
-    held = { direction = direction, untilNext = OffsetKeys.REPEAT_DELAY }
+    held = {}
+    startStepping(direction)
     updater:Show()
 end
 
@@ -117,6 +182,6 @@ function OffsetKeys.AddButton(layout)
     layout:AddInitializer(CreateSettingsButtonInitializer("Side offset keys", "Key Bindings",
         function() pcall(OffsetKeys.OpenBindings) end,
         "Bind keys that move the side offset.\n\n"
-        .. "• Hold & drag: hold it and move the mouse left or right\n"
+        .. "• Hold & drag: hold it, then the mouse, the left stick or the D-pad\n"
         .. "• Left, Right: a step each press; held, it keeps going", true))
 end
