@@ -232,6 +232,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.print = function(t) printed[#printed + 1] = t end
     local ns = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
+    assert(loadfile("CenterStop.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", ns)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
@@ -805,7 +806,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()

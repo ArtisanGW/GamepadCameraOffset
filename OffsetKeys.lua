@@ -13,8 +13,9 @@
 --          (EnableGamePadStick / EnableGamePadButton, as the game's soft cursor
 --          does, Blizzard_GamepadSoftCursor/SoftCursor.lua:25), so the left
 --          stick doesn't walk meanwhile. Both are blocked in combat: there the
---          mouse works, and the D-pad through CombatDPad.lua. Any other controller button let go ends it, so the
---          controller can never stay taken.
+--          mouse works, and the D-pad through CombatDPad.lua. Any other
+--          controller button let go ends it, so the controller can never stay
+--          taken. With Stop at center on, it stops at the center (CenterStop.lua).
 --   Left / Right: one step each press (the Step size slider); held, it keeps
 --          going, so a controller button works the same.
 -- Each change goes through the slider's own setting, so the settings page,
@@ -24,10 +25,6 @@ local Camera = _G.GamepadCameraOffset
 local OffsetKeys = {
     DRAG_PERCENT_PER_SCREEN = 200,  -- dragging across the whole screen: the slider's whole range
     STICK_PERCENT_PER_SECOND = 100, -- the left stick pushed all the way
-    CENTER_HOLD_PERCENT = 15,       -- a drag stops at the center until moved this much more
-    CENTER_VIBRATION = "High",      -- C_GamePad.SetVibration's type (see centerFeedback)
-    CENTER_VIBRATION_INTENSITY = 0.5,
-    CENTER_VIBRATION_SECONDS = 0.06,
     REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
     STICK = "Movement",             -- the game's name for the left stick
@@ -40,7 +37,7 @@ BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG = "Camera side: hold & drag"
 BINDING_NAME_GAMEPADCAMERAOFFSET_LEFT = "Camera side: left"
 BINDING_NAME_GAMEPADCAMERAOFFSET_RIGHT = "Camera side: right"
 
--- The key held now: { drag, value, lastX, stickX, controllerTaken } for Hold & drag;
+-- The key held now: { drag, value, lastX, stickX, controllerTaken, centerHold } for Hold & drag;
 -- { direction, untilNext } while a step repeats (either key).
 local held
 local updater = CreateFrame("Frame")
@@ -51,7 +48,7 @@ local function sideValue()
 end
 
 local function clampSide(value)
-    return math.max(Camera.SIDE_MIN, math.min(Camera.SIDE_MAX, value))
+    return Camera.Clamp(value, Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.DEFAULTS.side)
 end
 
 -- Sets the slider's value (clamped, whole percent) as the settings page would.
@@ -69,8 +66,7 @@ end
 
 -- The Step size slider, in percent.
 local function stepSize()
-    local percent = tonumber(Camera.GetSettings().stepSize) or Camera.DEFAULTS.stepSize
-    return math.max(Camera.STEP_SIZE_MIN, math.min(Camera.STEP_SIZE_MAX, percent))
+    return Camera.Clamp(Camera.GetSettings().stepSize, Camera.STEP_SIZE_MIN, Camera.STEP_SIZE_MAX, Camera.DEFAULTS.stepSize)
 end
 
 local function step(direction)
@@ -93,8 +89,7 @@ end
 
 -- The Drag speed slider, as a multiplier (1 = Normal).
 local function dragSpeed()
-    local percent = tonumber(Camera.GetSettings().dragSpeed) or Camera.DEFAULTS.dragSpeed
-    return math.max(Camera.DRAG_SPEED_MIN, math.min(Camera.DRAG_SPEED_MAX, percent)) / 100
+    return Camera.Clamp(Camera.GetSettings().dragSpeed, Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DEFAULTS.dragSpeed) / 100
 end
 
 local function screenWidth()
@@ -113,38 +108,10 @@ local function release()
     updater:Hide()
 end
 
--- A short buzz on the controller as the drag reaches the center. The game names
--- no vibration types in its own code: "High" (the small motor) is a guess, and
--- a client or controller without it just stays still.
-local function centerFeedback()
-    local gamePad = _G.C_GamePad
-    if type(gamePad) ~= "table" or type(gamePad.SetVibration) ~= "function" then return end
-    pcall(gamePad.SetVibration, OffsetKeys.CENTER_VIBRATION, OffsetKeys.CENTER_VIBRATION_INTENSITY)
-    if type(gamePad.StopVibration) == "function" then
-        C_Timer.After(OffsetKeys.CENTER_VIBRATION_SECONDS, function() pcall(gamePad.StopVibration) end)
-    end
-end
-
--- A drag's move (in percent before Drag speed). With Stop at center on, reaching
--- or crossing the center stops there, and it stays until CENTER_HOLD_PERCENT more is moved (either way),
--- so you feel it's centered; at any Drag speed the hold feels the same.
+-- A drag's move, in percent before Drag speed.
 local function dragBy(moved)
-    if held.centerHold then
-        held.centerHold = held.centerHold - math.abs(moved)
-        if held.centerHold > 0 then return end
-        moved = (moved > 0 and 1 or -1) * -held.centerHold   -- what's left past the hold
-        held.centerHold = nil
-    end
-    local before = held.value
-    local after = clampSide(before + moved * dragSpeed())
-    local centerHoldOn = Camera.GetSettings().centerHold == true   -- the Stop at center checkbox
-    if centerHoldOn and before ~= 0 and (after == 0 or (before > 0) ~= (after > 0)) then
-        after = 0
-        held.centerHold = OffsetKeys.CENTER_HOLD_PERCENT
-        centerFeedback()
-    end
-    held.value = after
-    OffsetKeys.SetSide(after)
+    held.value = Camera.CenterStop.Move(held, moved, dragSpeed(), clampSide)
+    OffsetKeys.SetSide(held.value)
 end
 
 updater:SetScript("OnUpdate", function(_, elapsed)

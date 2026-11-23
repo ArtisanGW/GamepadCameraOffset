@@ -47,7 +47,7 @@ local Camera = {
     --           own DownScale (0.25).
     --   dragSpeed: 100 (Normal) to 500: how fast the side offset follows the
     --           mouse and the left stick while hold & drag is held (OffsetKeys.lua).
-    --   centerHold: hold & drag stops at the center for a moment (OffsetKeys.lua); off
+    --   centerHold: hold & drag stops at the center for a moment (CenterStop.lua); off
     --           until you turn it on, as every option.
     --   stepSize: 5 to 50: how far a Left/Right key or a D-pad press moves the
     --           side offset (OffsetKeys.lua); 20 until you change it.
@@ -235,6 +235,7 @@ end
 
 -- Read by other files of this addon.
 Camera.GetSettings = getSettings
+Camera.Clamp = clamp
 Camera.GetCVar = getCVar
 Camera.GetCVarDefault = getCVarDefault
 Camera.IsControllerUIOn = isControllerUIOn

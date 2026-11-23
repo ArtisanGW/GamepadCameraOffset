@@ -275,7 +275,7 @@ end
 Debug.eventFrame = CreateFrame("Frame")
 Debug.eventFrame:RegisterEvent("PLAYER_LOGIN")
 Debug.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-Debug.eventFrame:SetScript("OnEvent", function(self, event)
+Debug.eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         -- A reload during a run left the test settings in: put yours back.
         local debugStore = getDebugStore()
