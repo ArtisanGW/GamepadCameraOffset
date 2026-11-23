@@ -2,7 +2,7 @@
 
 With a controller, the game keeps your character in the middle of the screen, with no over-the-shoulder view. This addon adds one, and you set it up the way you like it.
 
-**Hold & drag:** bind one key and slide the camera from one shoulder to the other while you play, no menus. Hold it and move the mouse, or on a controller push the left stick: your character stays put while the camera moves. In a fight, the D-pad's left and right step it instead.
+**Hold & drag:** bind one key and slide the camera from one shoulder to the other while you play, no menus. Hold it and move the mouse, or on a controller push the left stick: your character stays put while the camera moves. It stops for a moment at the center, so you know it's centered. In a fight, the D-pad's left and right step it instead.
 
 It's a simple tool with no dependencies:
 - Side offset: the camera over your right or left shoulder

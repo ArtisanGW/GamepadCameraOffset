@@ -379,7 +379,10 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     tick(0.016)
     eq(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
     eq(get("test_cameraOverShoulder"), "1.5", "the camera follows")
-    game.cursorX = 500 - 2000
+    game.cursorX = 1000 - 1000   -- back past the center in one move
+    tick(0.016)
+    eq(GamepadCameraOffsetDB.side, 0, "stops at the center")
+    game.cursorX = 0 - 2000
     tick(0.016)
     eq(GamepadCameraOffsetDB.side, -100, "clamped")
     keys.Drag("up")
@@ -497,6 +500,39 @@ test("hold & drag on a controller: the left stick and the D-pad move it, the sti
     eq(taker.takesStick, false, "the click let go: the controller is the game's again")
     eq(taker.takesButtons, false)
     eq(taker.shown, false)
+end)
+
+test("hold & drag stops at the center for a moment, with a buzz on the controller", function()
+    boot(true, { enabled = true, side = 30, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local vibrations = {}
+    _G.C_GamePad = { SetVibration = function(kind) vibrations[#vibrations + 1] = kind end, StopVibration = function() end }
+    local keys = GamepadCameraOffset.OffsetKeys
+    local taker = controllerTaker()
+    keys.Drag("down")
+    taker.scripts.OnGamePadStick(taker, "Movement", -1, 0)
+    tick(0.4)
+    eq(GamepadCameraOffsetDB.side, 0, "crossing the center: stops there")
+    eq(#vibrations, 1, "a buzz")
+    tick(0.05)
+    eq(GamepadCameraOffsetDB.side, 0, "held a moment")
+    tick(0.1)
+    eq(GamepadCameraOffsetDB.side, -5, "then on: 15% moved, 10% held")
+    eq(#vibrations, 1, "one buzz")
+    keys.Drag("up")
+    _G.C_GamePad = nil
+end)
+
+test("hold & drag starting at the center leaves it at once", function()
+    boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
+    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    local taker = controllerTaker()
+    keys.Drag("down")
+    taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
+    tick(0.1)
+    eq(GamepadCameraOffsetDB.side, 10)
+    keys.Drag("up")
 end)
 
 test("drag speed: 300% makes the left stick three times faster", function()

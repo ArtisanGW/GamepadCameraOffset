@@ -24,6 +24,10 @@ local Camera = _G.GamepadCameraOffset
 local OffsetKeys = {
     DRAG_PERCENT_PER_SCREEN = 200,  -- dragging across the whole screen: the slider's whole range
     STICK_PERCENT_PER_SECOND = 100, -- the left stick pushed all the way
+    CENTER_HOLD_PERCENT = 10,       -- a drag stops at the center until moved this much more
+    CENTER_VIBRATION = "High",      -- C_GamePad.SetVibration's type (see centerFeedback)
+    CENTER_VIBRATION_INTENSITY = 0.5,
+    CENTER_VIBRATION_SECONDS = 0.06,
     REPEAT_DELAY = 0.4,             -- seconds a held step waits before it repeats
     REPEAT_INTERVAL = 0.08,         -- then seconds between steps
     STICK = "Movement",             -- the game's name for the left stick
@@ -109,18 +113,47 @@ local function release()
     updater:Hide()
 end
 
+-- A short buzz on the controller as the drag reaches the center. The game names
+-- no vibration types in its own code: "High" (the small motor) is a guess, and
+-- a client or controller without it just stays still.
+local function centerFeedback()
+    local gamePad = _G.C_GamePad
+    if type(gamePad) ~= "table" or type(gamePad.SetVibration) ~= "function" then return end
+    pcall(gamePad.SetVibration, OffsetKeys.CENTER_VIBRATION, OffsetKeys.CENTER_VIBRATION_INTENSITY)
+    if type(gamePad.StopVibration) == "function" then
+        C_Timer.After(OffsetKeys.CENTER_VIBRATION_SECONDS, function() pcall(gamePad.StopVibration) end)
+    end
+end
+
+-- A drag's move (in percent before Drag speed). Reaching or crossing the center
+-- stops there, and it stays until CENTER_HOLD_PERCENT more is moved (either way),
+-- so you feel it's centered; at any Drag speed the hold feels the same.
+local function dragBy(moved)
+    if held.centerHold then
+        held.centerHold = held.centerHold - math.abs(moved)
+        if held.centerHold > 0 then return end
+        moved = (moved > 0 and 1 or -1) * -held.centerHold   -- what's left past the hold
+        held.centerHold = nil
+    end
+    local before = held.value
+    local after = clampSide(before + moved * dragSpeed())
+    if before ~= 0 and (after == 0 or (before > 0) ~= (after > 0)) then
+        after = 0
+        held.centerHold = OffsetKeys.CENTER_HOLD_PERCENT
+        centerFeedback()
+    end
+    held.value = after
+    OffsetKeys.SetSide(after)
+end
+
 updater:SetScript("OnUpdate", function(_, elapsed)
     if not held then return release() end
     if held.drag then
         local x = cursorX()
         local moved = (x - held.lastX) / screenWidth() * OffsetKeys.DRAG_PERCENT_PER_SCREEN
             + held.stickX * OffsetKeys.STICK_PERCENT_PER_SECOND * elapsed
-        moved = moved * dragSpeed()
         held.lastX = x
-        if moved ~= 0 then
-            held.value = clampSide(held.value + moved)
-            OffsetKeys.SetSide(held.value)
-        end
+        if moved ~= 0 then dragBy(moved) end
     end
     if held.direction then
         held.untilNext = held.untilNext - elapsed
