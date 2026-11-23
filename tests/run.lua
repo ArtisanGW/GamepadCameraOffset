@@ -353,6 +353,27 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     eq(GamepadCameraOffsetDB.side, -100, "let go: stays")
 end)
 
+test("a Key Bindings button: opens the game's page at AddOns, that section opened up", function()
+    local addonsSection = { GetName = function() return "AddOns" end, data = {} }
+    local opened
+    _G.ADDONS = "AddOns"
+    boot(false, nil)
+    Settings.KEYBINDINGS_CATEGORY_ID = 7
+    Settings.OpenToCategory = function(id, section) opened = { id, section } end
+    _G.SettingsPanel.GetCategory = function(_, id) return id == 7 and "keys" or nil end
+    _G.SettingsPanel.GetLayout = function(_, category)
+        if category == "keys" then return { EnumerateInitializers = function() return ipairs({ addonsSection }) end } end
+        return { AddInitializer = function(_, initializer) game.buttons[#game.buttons + 1] = initializer end }
+    end
+    local button
+    for _, initializer in ipairs(game.buttons) do if initializer.name == "Side offset keys" then button = initializer end end
+    assert(button, "the button is on the page")
+    eq(button.buttonText, "Key Bindings")
+    button.onClick()
+    eq(opened[1], 7); eq(opened[2], "AddOns")
+    eq(addonsSection.data.expanded, true)
+end)
+
 test("left and right keys: a step each press, repeating while held, back onto the steps", function()
     boot(false, { enabled = true, side = 37, tilt = 0, lookDown = 0 })
     game.fire("PLAYER_ENTERING_WORLD"); frame()
@@ -613,11 +634,11 @@ test("debug build: Gamepad Reticle On Target turned off counts as missing, to se
     eq(button(), nil, "debug build, turned on: no button")
 end)
 
-test("a Get button for each missing sibling, in order, each with its own CurseForge link", function()
+test("a Get button for each missing sibling, in order after the Key Bindings one, each with its own CurseForge link", function()
     boot(true, nil)
     local names = {}
     for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.name .. ": " .. initializer.buttonText end end
-    eq(table.concat(names, ", "), "Reticle on your target: Get the addon, Customize the reticle: Get the addon")
+    eq(table.concat(names, ", "), "Side offset keys: Key Bindings, Reticle on your target: Get the addon, Customize the reticle: Get the addon")
     for _, initializer in ipairs(game.buttons) do
         if initializer.name == "Customize the reticle" then initializer.onClick() end
     end

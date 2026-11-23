@@ -281,7 +281,7 @@ function Camera.RegisterSettings()
         .. "• Centered: the game's normal view\n"
         .. "• 100%: the furthest it goes\n\n"
         .. "The effect is stronger when you zoom in.\n\n"
-        .. "Keys can move it too, in Key Bindings > AddOns.",
+        .. "Keys can move it too: see Side offset keys below.",
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
     addSetting("tilt", Settings.VarType.Number, "Tilt",
@@ -301,6 +301,7 @@ function Camera.RegisterSettings()
         .. "Only used while Tilt is on.",
         sliderOptions(Camera.LOOK_DOWN_MIN, Camera.LOOK_DOWN_MAX, Camera.LOOK_DOWN_STEP,
             function(value) return Camera.Label(value, "Default", "kept") end))
+    if Camera.OffsetKeys then Camera.OffsetKeys.AddButton(layout) end   -- OffsetKeys.lua
     if Camera.AddRelatedAddonButtons then Camera.AddRelatedAddonButtons(layout) end   -- RelatedAddons.lua
     Settings.RegisterAddOnCategory(category)
 end

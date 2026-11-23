@@ -6,6 +6,7 @@
   - Hold one (a mouse button too, like the middle one) and move the mouse left or right
   - Or step it left and right; held, it keeps going (works on a controller)
 - None is bound until you bind it
+- A Key Bindings button on the settings page opens them
 
 ## 1.0.1
 

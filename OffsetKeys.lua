@@ -93,3 +93,30 @@ function OffsetKeys.Step(direction, keystate)
     held = { direction = direction, untilNext = OffsetKeys.REPEAT_DELAY }
     updater:Show()
 end
+
+-- Opens Options > Key Bindings at its AddOns section, opened up, as the game's
+-- own Ping page does for its keys (forever branch
+-- Blizzard_SettingsDefinitions_Frame/PingSystem.lua:74-90).
+function OffsetKeys.OpenBindings()
+    local categoryID = Settings.KEYBINDINGS_CATEGORY_ID
+    if not categoryID then return end
+    local sectionName = ADDONS
+    local category = SettingsPanel and SettingsPanel:GetCategory(categoryID)
+    local layout = category and SettingsPanel:GetLayout(category)
+    if layout and layout.EnumerateInitializers then
+        for _, initializer in layout:EnumerateInitializers() do
+            if initializer:GetName() == sectionName and initializer.data then initializer.data.expanded = true end
+        end
+    end
+    Settings.OpenToCategory(categoryID, sectionName)
+end
+
+-- The settings page's button (GamepadCameraOffset.lua calls this while building it).
+function OffsetKeys.AddButton(layout)
+    if not (layout and type(CreateSettingsButtonInitializer) == "function") then return end
+    layout:AddInitializer(CreateSettingsButtonInitializer("Side offset keys", "Key Bindings",
+        function() pcall(OffsetKeys.OpenBindings) end,
+        "Bind keys that move the side offset.\n\n"
+        .. "• Hold, drag: hold it and move the mouse left or right\n"
+        .. "• Left, Right: a step each press; held, it keeps going", true))
+end
