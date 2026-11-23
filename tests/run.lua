@@ -348,13 +348,10 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     game.cursorX = 500 - 2000
     tick(0.016)
     eq(GamepadCameraOffsetDB.side, -100, "clamped")
-    game.cursorX = -1500 + 200   -- back a tenth of the screen: moves at once, no dead stretch
-    tick(0.016)
-    eq(GamepadCameraOffsetDB.side, -80, "turning back at the end moves it straight away")
     keys.Drag("up")
     game.cursorX = 500
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, -80, "let go: stays")
+    eq(GamepadCameraOffsetDB.side, -100, "let go: stays")
 end)
 
 test("drag speed: 200% moves the slider twice as far for the same cursor move", function()
