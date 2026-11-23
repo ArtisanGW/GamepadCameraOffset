@@ -332,7 +332,7 @@ test("keys move the side offset: in Key Bindings > AddOns, none bound", function
     end
     assert(not bindings:find("default="), "no key bound by default")
     boot(false, nil)
-    eq(BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG, "Camera side: hold, drag")
+    eq(BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG, "Camera side: hold & drag")
 end)
 
 test("held drag key: moving the mouse moves the slider, the whole screen its whole range", function()

@@ -20,7 +20,7 @@ local OffsetKeys = {
 Camera.OffsetKeys = OffsetKeys
 
 -- Binding names (Options > Key Bindings > AddOns).
-BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG = "Camera side: hold, drag"
+BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG = "Camera side: hold & drag"
 BINDING_NAME_GAMEPADCAMERAOFFSET_LEFT = "Camera side: left"
 BINDING_NAME_GAMEPADCAMERAOFFSET_RIGHT = "Camera side: right"
 
@@ -117,6 +117,6 @@ function OffsetKeys.AddButton(layout)
     layout:AddInitializer(CreateSettingsButtonInitializer("Side offset keys", "Key Bindings",
         function() pcall(OffsetKeys.OpenBindings) end,
         "Bind keys that move the side offset.\n\n"
-        .. "• Hold, drag: hold it and move the mouse left or right\n"
+        .. "• Hold & drag: hold it and move the mouse left or right\n"
         .. "• Left, Right: a step each press; held, it keeps going", true))
 end
