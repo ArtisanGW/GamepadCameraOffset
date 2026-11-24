@@ -1,4 +1,5 @@
 **Summary:** Moves the camera over your shoulder, with a controller too. Hold one key and slide it to the side you like.
+**Categories:** Miscellaneous
 
 ## Description
 
