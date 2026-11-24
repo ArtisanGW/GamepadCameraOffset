@@ -5,6 +5,8 @@
 
 With a controller, the game keeps your character in the middle of the screen, with no over-the-shoulder view. This addon adds one, and you set it up the way you like it.
 
+[![Support me on Ko-fi](https://images.weserv.nl/?url=storage.ko-fi.com/cdn/kofi5.png&h=36)](https://ko-fi.com/artisangw)
+
 **Hold & drag:** bind one key and slide the camera from one shoulder to the other while you play, no menus. Hold it and move the mouse, or on a controller push the left stick: your character stays put while the camera moves. In a fight, the D-pad's left and right step it instead.
 
 It's a simple tool with no dependencies:
@@ -26,5 +28,3 @@ It uses the game's own experimental camera settings (its ActionCam), and hides t
 - [Gamepad Reticle Customizer](https://www.curseforge.com/projects/1818557): changes the reticle's shape, size, color and border.
 
 The code is free to copy, as long as you credit it.
-
-[![Support me on Ko-fi](https://images.weserv.nl/?url=storage.ko-fi.com/cdn/kofi5.png&h=36)](https://ko-fi.com/artisangw)
