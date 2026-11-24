@@ -1,5 +1,9 @@
 # Gamepad Camera Offset
 
+## 1.2.1
+
+- Tidier code behind the scenes: nothing changes in game
+
 ## 1.2.0
 
 - Hold & drag works on a controller: bind it to the right stick's click, then move the side offset with the left stick or the D-pad
