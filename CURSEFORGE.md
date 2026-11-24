@@ -1,3 +1,5 @@
+**Summary:** Moves the camera over your shoulder, with a controller too. Hold one key and slide it to the side you like.
+
 ## Description
 
 With a controller, the game keeps your character in the middle of the screen, with no over-the-shoulder view. This addon adds one, and you set it up the way you like it.
