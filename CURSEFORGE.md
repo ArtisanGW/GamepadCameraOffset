@@ -24,6 +24,7 @@ Every setting starts at the game's own value, so nothing changes until you move 
 It uses the game's own experimental camera settings (its ActionCam), and hides the game's warning about them. Turn the addon off and the game's camera comes back.
 
 ## Goes well with
+- [Gamepad Fast Map](https://www.curseforge.com/projects/1827949): opens and closes the world map without its hitch.
 - [Gamepad Reticle On Target](https://www.curseforge.com/projects/1819101): puts the reticle on your target, so it stays on what you attack with the camera offset.
 - [Gamepad Reticle Customizer](https://www.curseforge.com/projects/1818557): changes the reticle's shape, size, color and border.
 

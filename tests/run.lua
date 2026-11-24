@@ -850,7 +850,7 @@ test("a Get button for each missing sibling, in order after the Key Bindings one
     boot(true, nil)
     local names = {}
     for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.name .. ": " .. initializer.buttonText end end
-    expectEqual(table.concat(names, ", "), "Side offset keys: Key Bindings, Reticle on your target: Get the addon, Customize the reticle: Get the addon")
+    expectEqual(table.concat(names, ", "), "Side offset keys: Key Bindings, Reticle on your target: Get the addon, Customize the reticle: Get the addon, Map without its hitch: Get the addon")
     for _, initializer in ipairs(game.buttons) do
         if initializer.name == "Customize the reticle" then initializer.onClick() end
     end
