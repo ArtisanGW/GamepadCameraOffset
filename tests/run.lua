@@ -2,11 +2,13 @@
 -- frames, timers and events. From GamepadCameraOffset:  luajit tests/run.lua
 local reportLine = print   -- the tests replace print to read what the addon says
 local failed, passed = 0, 0
-local function test(name, fn)
-    local ok, err = xpcall(fn, debug.traceback)
+local function test(name, testBody)
+    local ok, err = xpcall(testBody, debug.traceback)
     if ok then passed = passed + 1 else failed = failed + 1; reportLine("FAIL " .. name .. "\n" .. err) end
 end
-local function eq(a, b, msg) if a ~= b then error((msg or "") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
+local function expectEqual(actual, expected, message)
+    if actual ~= expected then error((message or "") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual), 2) end
+end
 
 local game
 -- releaseBuild: as in the release zip, without Debug.lua (see .pkgmeta).
@@ -30,28 +32,28 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         test_cameraDynamicPitchBaseFovPad = "0.4", test_cameraDynamicPitchBaseFovPadFlying = "0.75",
         test_cameraDynamicPitchBaseFovPadDownScale = "0.25",
         CameraKeepCharacterCentered = "1", CameraReduceUnexpectedMovement = "0" }
-    for k, v in pairs(defaults) do game.saved[k] = v end
+    for key, value in pairs(defaults) do game.saved[key] = value end
     game.saved.nameplateShowEnemies = nameplateOptions.enemies or "0"
     game.saved.nameplateShowFriendlyPlayers = nameplateOptions.friends or "0"
     game.saved.nameplateShowFriendlyClassColor = nameplateOptions.classColors or "0"
     local function fire(event, ...)
-        for _, f in ipairs(game.frames) do if f.ev[event] and f.script then f.script(f, event, ...) end end
+        for _, fakeFrame in ipairs(game.frames) do if fakeFrame.ev[event] and fakeFrame.script then fakeFrame.script(fakeFrame, event, ...) end end
     end
     game.fire = fire
-    local function changed(n) fire("CVAR_UPDATE", n, _G.C_CVar.GetCVar(n)) end
+    local function changed(cvarName) fire("CVAR_UPDATE", cvarName, _G.C_CVar.GetCVar(cvarName)) end
     if gamepad then game.temp.CameraKeepCharacterCentered = "1"; game.temp.CameraReduceUnexpectedMovement = "0" end
     _G.C_CVar = {
-        GetCVar = function(n) if game.temp[n] ~= nil then return game.temp[n] end return game.saved[n] end,
-        SetCVar = function(n, v)
-            if nameplateOptions.refuse and n:find("^nameplate") then return false end
-            game.saved[n] = v; changed(n); return true
+        GetCVar = function(cvarName) if game.temp[cvarName] ~= nil then return game.temp[cvarName] end return game.saved[cvarName] end,
+        SetCVar = function(cvarName, value)
+            if nameplateOptions.refuse and cvarName:find("^nameplate") then return false end
+            game.saved[cvarName] = value; changed(cvarName); return true
         end,
-        SetTempCVar = function(n, v) game.temp[n] = v; changed(n) end,
-        RemoveTempCVar = function(n) game.temp[n] = nil; changed(n) end,
-        GetCVarDefault = function(n) return defaults[n] end,
+        SetTempCVar = function(cvarName, value) game.temp[cvarName] = value; changed(cvarName) end,
+        RemoveTempCVar = function(cvarName) game.temp[cvarName] = nil; changed(cvarName) end,
+        GetCVarDefault = function(cvarName) return defaults[cvarName] end,
     }
     _G.InputUtil = { IsGamepadUIEnabled = function() return gamepad end }
-    _G.C_Timer = { After = function(_, fn) game.timers[#game.timers + 1] = fn end }
+    _G.C_Timer = { After = function(_, callback) game.timers[#game.timers + 1] = callback end }
     local function newFakeRegion()
         local fakeRegion = {}
         for _, methodName in ipairs({ "SetAllPoints", "SetColorTexture", "SetPoint", "SetWidth", "SetSize", "SetFrameStrata", "RegisterForClicks", "EnableMouse",
@@ -133,27 +135,27 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         RegisterVerticalLayoutCategory = function(name)
             return { name = name, GetID = function() return 42 end }, { AddInitializer = function(_, initializer) game.buttons[#game.buttons + 1] = initializer end }
         end,
-        RegisterAddOnSetting = function(cat, variable, key, tbl, kind, label, def)
-            if tbl[key] == nil then tbl[key] = def end
-            local s = { variable = variable, key = key, tbl = tbl }
+        RegisterAddOnSetting = function(category, variable, key, savedTable, kind, label, defaultValue)
+            if savedTable[key] == nil then savedTable[key] = defaultValue end
+            local setting = { variable = variable, key = key, tbl = savedTable }
             -- As the game's: saved in the table, then its callback.
-            function s:SetValue(value) self.tbl[self.key] = value; game.callbacks[self.variable](nil, self, value) end
-            game.settings[variable] = s
-            return s
+            function setting:SetValue(value) self.tbl[self.key] = value; game.callbacks[self.variable](nil, self, value) end
+            game.settings[variable] = setting
+            return setting
         end,
-        SetOnValueChangedCallback = function(variable, fn) game.callbacks[variable] = fn end,
+        SetOnValueChangedCallback = function(variable, callback) game.callbacks[variable] = callback end,
         CreateColorSwatch = function(_, setting) game.swatch = setting end,
-        RegisterProxySetting = function(cat, variable, kind, label, def, getValue, setValue)
+        RegisterProxySetting = function(category, variable, kind, label, defaultValue, getValue, setValue)
             local s = { variable = variable, key = variable, label = label, getValue = getValue, setValue = setValue }
             game.settings[variable] = s
             return s
         end,
         CreateCheckbox = function() end,
         CreateSlider = function(_, setting, options) game.options = game.options or {}; game.options[setting.key] = options end,
-        CreateSliderOptions = function(lo, hi, step)
-            return { lo = lo, hi = hi, SetLabelFormatter = function(self, _, fn) self.format = fn end }
+        CreateSliderOptions = function(minimum, maximum, step)
+            return { lo = minimum, hi = maximum, SetLabelFormatter = function(self, _, formatter) self.format = formatter end }
         end,
-        RegisterAddOnCategory = function(cat) game.category = cat end,
+        RegisterAddOnCategory = function(category) game.category = category end,
         OpenToCategory = function(id) game.opened = id end,
     }
     _G.SlashCmdList = {}
@@ -164,10 +166,10 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     game.zoom = 10
     _G.GetCameraZoom = function() return game.zoom end
     _G.GetCursorCenterPosition = function() return 0, 480 end
-    _G.issecretvalue = function(v) return type(v) == "table" and v.secret == true end
-    _G.hooksecurefunc = function(t, m, fn)
-        if type(t) == "string" then t, m, fn = _G, t, m end   -- the global form: hooksecurefunc("Name", fn)
-        local orig = t[m]; t[m] = function(...) local r = orig(...); fn(...); return r end
+    _G.issecretvalue = function(value) return type(value) == "table" and value.secret == true end
+    _G.hooksecurefunc = function(owner, methodName, hook)
+        if type(owner) == "string" then owner, methodName, hook = _G, owner, methodName end   -- the global form: hooksecurefunc("Name", fn)
+        local original = owner[methodName]; owner[methodName] = function(...) local result = original(...); hook(...); return result end
     end
     game.consoleCommands = {}
     _G.ConsoleExec = function(command) game.consoleCommands[#game.consoleCommands + 1] = command end
@@ -181,17 +183,17 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.GamepadReticle = {
         GetEffectiveScale = function() return 1.5 end,
         ClearAllPoints = function(self) self.point = nil end,
-        SetPoint = function(self, p, rel, rp, x, y) self.point = { p, rp, x, y, relativeTo = rel } end,
+        SetPoint = function(self, point, relativeFrame, relativePoint, x, y) self.point = { point, relativePoint, x, y, relativeTo = relativeFrame } end,
         -- Like the game: anchored to a nameplate (a restricted region), it can't be measured.
         GetPoint = function(self)
-            local q = self.point
-            if q and type(q.relativeTo) == "table" and q.relativeTo.restricted then
+            local anchor = self.point
+            if anchor and type(anchor.relativeTo) == "table" and anchor.relativeTo.restricted then
                 error("GamepadReticle:GetPoint(): Action[FrameMeasurement] failed because[Can't measure restricted regions]")
             end
-            if q then return q[1], q.relativeTo or UIParent, q[2], q[3], q[4] end
+            if anchor then return anchor[1], anchor.relativeTo or UIParent, anchor[2], anchor[3], anchor[4] end
         end,
         Recenter = function(self) game.recenters = game.recenters + 1; self.point = { "CENTER", "BOTTOM", 0, 320 } end,
-        Icons = { StandardIcon = { color = { 1, 1, 1, 1 }, SetVertexColor = function(self, r, g, b, a) self.color = { r, g, b, a } end } },
+        Icons = { StandardIcon = { color = { 1, 1, 1, 1 }, SetVertexColor = function(self, red, green, blue, alpha) self.color = { red, green, blue, alpha } end } },
     }
     -- Units and their nameplates: game.units[unit] = true, game.nameplates[unit] = a frame.
     game.units, game.nameplates = {}, {}
@@ -229,129 +231,129 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     _G.GamepadCameraOffsetPopup = nil
     local printed = {}
     game.printed = printed
-    _G.print = function(t) printed[#printed + 1] = t end
-    local ns = {}
-    assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("CenterStop.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("Popup.lua"))("GamepadCameraOffset", ns)
-    assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", ns)
-    if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", ns) end
+    _G.print = function(text) printed[#printed + 1] = text end
+    local namespace = {}
+    assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("CenterStop.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Popup.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", namespace)
+    if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", namespace) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
-local function frame() local t = game.timers; game.timers = {}; for _, fn in ipairs(t) do fn() end end
+local function runNextFrame() local dueTimers = game.timers; game.timers = {}; for _, timer in ipairs(dueTimers) do timer() end end
 local function set(key, value)
-    local s = game.settings["GamepadCameraOffset_" .. key]
-    s.tbl[s.key] = value
-    game.callbacks[s.variable](nil, s, value)
+    local setting = game.settings["GamepadCameraOffset_" .. key]
+    setting.tbl[setting.key] = value
+    game.callbacks[setting.variable](nil, setting, value)
 end
-local get = function(n) return C_CVar.GetCVar(n) end
+local get = function(cvarName) return C_CVar.GetCVar(cvarName) end
 
 -- Settings that move the camera (the defaults are the game's own, which change nothing).
 local function moved() return { enabled = true, side = 40, tilt = 50, lookDown = 50 } end
 
 test("registers its page under Options > AddOns, with the game's own values as defaults", function()
     boot(true, nil)
-    eq(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
-    eq(GamepadCameraOffsetDB.enabled, true); eq(GamepadCameraOffsetDB.side, 0); eq(GamepadCameraOffsetDB.tilt, 0)
-    eq(GamepadCameraOffsetDB.lookDown, 0, "Default: the game's own")
-    eq(GamepadCameraOffsetDB.dragSpeed, 100, "Drag speed: Normal")
-    eq(game.options.side.format(40), "40% right"); eq(game.options.side.format(-25), "25% left"); eq(game.options.side.format(0), "Centered")
-    eq(game.options.tilt.format(35), "35% tilt"); eq(game.options.tilt.format(0), "Off")
-    eq(game.options.aim, nil, "no reticle offset here any more")
-    eq(game.settings.GamepadCameraOffset_crosshair, nil, "no reticle setting either")
-    eq(SLASH_GAMEPADCAMERAOFFSET1, "/gco"); eq(SLASH_GAMEPADCAMERAOFFSET2, "/gamepadcameraoffset")
+    expectEqual(game.category.name, "Gamepad Camera Offset", "spaced in the settings window")
+    expectEqual(GamepadCameraOffsetDB.enabled, true); expectEqual(GamepadCameraOffsetDB.side, 0); expectEqual(GamepadCameraOffsetDB.tilt, 0)
+    expectEqual(GamepadCameraOffsetDB.lookDown, 0, "Default: the game's own")
+    expectEqual(GamepadCameraOffsetDB.dragSpeed, 100, "Drag speed: Normal")
+    expectEqual(game.options.side.format(40), "40% right"); expectEqual(game.options.side.format(-25), "25% left"); expectEqual(game.options.side.format(0), "Centered")
+    expectEqual(game.options.tilt.format(35), "35% tilt"); expectEqual(game.options.tilt.format(0), "Off")
+    expectEqual(game.options.aim, nil, "no reticle offset here any more")
+    expectEqual(game.settings.GamepadCameraOffset_crosshair, nil, "no reticle setting either")
+    expectEqual(SLASH_GAMEPADCAMERAOFFSET1, "/gco"); expectEqual(SLASH_GAMEPADCAMERAOFFSET2, "/gamepadcameraoffset")
     SlashCmdList.GAMEPADCAMERAOFFSET("")
-    eq(game.opened, 42, "/gco opens it")
+    expectEqual(game.opened, 42, "/gco opens it")
 end)
 
 test("with the defaults (the game's values), the game's camera is left alone: no ActionCam, still centered", function()
     boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(#game.consoleCommands, 0, "no ActionCam command")
-    eq(get("CameraKeepCharacterCentered"), "1", "the controller's own centering kept")
-    eq(get("test_cameraOverShoulder"), "0")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(#game.consoleCommands, 0, "no ActionCam command")
+    expectEqual(get("CameraKeepCharacterCentered"), "1", "the controller's own centering kept")
+    expectEqual(get("test_cameraOverShoulder"), "0")
     set("side", 20)
-    eq(get("CameraKeepCharacterCentered"), "0", "a slider moved: now it applies")
-    eq(table.concat(game.consoleCommands, ","), "ActionCam basic")
+    expectEqual(get("CameraKeepCharacterCentered"), "0", "a slider moved: now it applies")
+    expectEqual(table.concat(game.consoleCommands, ","), "ActionCam basic")
     set("side", 0)
-    eq(get("CameraKeepCharacterCentered"), "1", "back at the game's values: the game's camera back")
-    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
+    expectEqual(get("CameraKeepCharacterCentered"), "1", "back at the game's values: the game's camera back")
+    expectEqual(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
 end)
 
 test("on a controller, entering the world un-centers the camera and sets both offsets", function()
     boot(true, moved())
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(get("CameraKeepCharacterCentered"), "0", "the temp value wins over the controller's")
-    eq(game.saved.CameraKeepCharacterCentered, "1", "your saved setting untouched")
-    eq(get("test_cameraOverShoulder"), "1.2")
-    eq(get("test_cameraDynamicPitch"), "1")
-    eq(get("test_cameraDynamicPitchBaseFovPad"), "0.4375", "tilt 50%: halfway from 0.75 to 0.125")
-    eq(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.4375")
-    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.5", "tilt when looking down: 50% by default")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(get("CameraKeepCharacterCentered"), "0", "the temp value wins over the controller's")
+    expectEqual(game.saved.CameraKeepCharacterCentered, "1", "your saved setting untouched")
+    expectEqual(get("test_cameraOverShoulder"), "1.2")
+    expectEqual(get("test_cameraDynamicPitch"), "1")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPad"), "0.4375", "tilt 50%: halfway from 0.75 to 0.125")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.4375")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.5", "tilt when looking down: 50% by default")
 end)
 
 test("ActionCam basic runs once before the first apply; off when disabled, basic again when enabled", function()
     boot(false, nil)
-    eq(#game.consoleCommands, 0, "nothing before entering the world")
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    expectEqual(#game.consoleCommands, 0, "nothing before entering the world")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("side", 20); set("tilt", 70)
-    eq(table.concat(game.consoleCommands, ","), "ActionCam basic", "once, however many changes")
+    expectEqual(table.concat(game.consoleCommands, ","), "ActionCam basic", "once, however many changes")
     set("enabled", false)
-    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
+    expectEqual(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off")
     set("enabled", true)
-    eq(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off,ActionCam basic")
+    expectEqual(table.concat(game.consoleCommands, ","), "ActionCam basic,ActionCam off,ActionCam basic")
 end)
 
 test("disabled at login runs no ActionCam command", function()
     boot(false, { enabled = false })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(#game.consoleCommands, 0)
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(#game.consoleCommands, 0)
 end)
 
 test("the game's experimental warning: its event dropped at load, the popup hidden if shown", function()
     boot(false, nil)
-    eq(game.internalEvents.EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED, nil, "the game no longer listens for it")
+    expectEqual(game.internalEvents.EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED, nil, "the game no longer listens for it")
     StaticPopup_Show("EXPERIMENTAL_CVAR_WARNING")
-    eq(game.popupsShown.EXPERIMENTAL_CVAR_WARNING, nil, "hidden at once")
+    expectEqual(game.popupsShown.EXPERIMENTAL_CVAR_WARNING, nil, "hidden at once")
     StaticPopup_Show("SOMETHING_ELSE")
-    eq(game.popupsShown.SOMETHING_ELSE, true, "other popups untouched")
+    expectEqual(game.popupsShown.SOMETHING_ELSE, true, "other popups untouched")
 end)
 
 test("tilt when looking down: the slider's percentage as the game's 0 to 1, labelled", function()
     boot(false, moved())
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("lookDown", 80)
-    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.8")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.8")
     set("lookDown", 500)
-    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "1", "clamped")
-    eq(game.options.lookDown.format(80), "80% kept"); eq(game.options.lookDown.format(0), "Default")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadDownScale"), "1", "clamped")
+    expectEqual(game.options.lookDown.format(80), "80% kept"); expectEqual(game.options.lookDown.format(0), "Default")
     set("lookDown", 0)
-    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "Default: the game's own value")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "Default: the game's own value")
     set("enabled", false)
-    eq(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "the game's default back")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPadDownScale"), "0.25", "the game's default back")
 end)
 
 test("the game re-centering (a switch to the controller) is undone on the next frame, once", function()
     boot(true, moved())
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     C_CVar.SetTempCVar("CameraKeepCharacterCentered", "1")
-    eq(#game.timers, 1, "one re-apply queued")
-    frame()
-    eq(get("CameraKeepCharacterCentered"), "0")
-    eq(#game.timers, 0, "its own change queues nothing more")
+    expectEqual(#game.timers, 1, "one re-apply queued")
+    runNextFrame()
+    expectEqual(get("CameraKeepCharacterCentered"), "0")
+    expectEqual(#game.timers, 0, "its own change queues nothing more")
 end)
 
 test("sliders apply at once; tilt Off turns the pitch off", function()
     boot(false, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("side", -50)
-    eq(get("test_cameraOverShoulder"), "-1.5", "50% left")
+    expectEqual(get("test_cameraOverShoulder"), "-1.5", "50% left")
     set("tilt", 0)
-    eq(get("test_cameraDynamicPitch"), "0")
+    expectEqual(get("test_cameraDynamicPitch"), "0")
     set("side", 999)
-    eq(get("test_cameraOverShoulder"), "3", "clamped")
+    expectEqual(get("test_cameraOverShoulder"), "3", "clamped")
 end)
 
 -- The updater frame of OffsetKeys.lua: its OnUpdate run once, elapsed seconds later.
@@ -368,79 +370,79 @@ test("keys move the side offset: in Key Bindings > AddOns, none bound", function
     end
     assert(not bindings:find("default="), "no key bound by default")
     boot(false, nil)
-    eq(BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG, "Camera side: hold & drag")
+    expectEqual(BINDING_NAME_GAMEPADCAMERAOFFSET_DRAG, "Camera side: hold & drag")
 end)
 
 test("held drag key: moving the mouse moves the slider, the whole screen its whole range", function()
     boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     keys.Drag("down")
     game.cursorX = 500 + 500   -- a quarter of the 2000-pixel screen to the right
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
-    eq(get("test_cameraOverShoulder"), "1.5", "the camera follows")
+    expectEqual(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
+    expectEqual(get("test_cameraOverShoulder"), "1.5", "the camera follows")
     game.cursorX = 500 - 2000
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, -100, "clamped")
+    expectEqual(GamepadCameraOffsetDB.side, -100, "clamped")
     keys.Drag("up")
     game.cursorX = 500
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, -100, "let go: stays")
+    expectEqual(GamepadCameraOffsetDB.side, -100, "let go: stays")
 end)
 
 test("drag speed: 200% moves the slider twice as far for the same cursor move", function()
     boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 200 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     keys.Drag("down")
     game.cursorX = 500 + 250   -- an eighth of the 2000-pixel screen
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 50, "a quarter of the range at Normal would be 25")
+    expectEqual(GamepadCameraOffsetDB.side, 50, "a quarter of the range at Normal would be 25")
     keys.Drag("up")
-    eq(game.options.dragSpeed.format(100), "Normal"); eq(game.options.dragSpeed.format(250), "250%")
-    eq(GamepadCameraOffsetDB.dragSpeed, 200)
+    expectEqual(game.options.dragSpeed.format(100), "Normal"); expectEqual(game.options.dragSpeed.format(250), "250%")
+    expectEqual(GamepadCameraOffsetDB.dragSpeed, 200)
 end)
 
 test("in a fight: holding hold & drag turns the D-pad into steps, letting go gives it back", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, stepSize = 10 })
-    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local combatDPad = GamepadCameraOffset.CombatDPad
-    eq(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the hold & drag key goes through the secure button")
+    expectEqual(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the hold & drag key goes through the secure button")
     game.combat = true
     combatDPad.dragButton:SecureClick(true)
-    eq(game.bindings.PADDRIGHT, "GamepadCameraOffsetStepRight", "D-pad right: a step")
+    expectEqual(game.bindings.PADDRIGHT, "GamepadCameraOffsetStepRight", "D-pad right: a step")
     _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", true)
-    eq(GamepadCameraOffsetDB.side, 10, "stepped in combat")
+    expectEqual(GamepadCameraOffsetDB.side, 10, "stepped in combat")
     _G.GamepadCameraOffsetStepRight.click(nil, "LeftButton", false)
     _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", true)
     _G.GamepadCameraOffsetStepLeft.click(nil, "LeftButton", false)
-    eq(GamepadCameraOffsetDB.side, 0, "and back")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "and back")
     combatDPad.dragButton:SecureClick(false)
-    eq(game.bindings.PADDRIGHT, nil, "let go: the D-pad is the game's again")
-    eq(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the key's route stays")
+    expectEqual(game.bindings.PADDRIGHT, nil, "let go: the D-pad is the game's again")
+    expectEqual(game.bindings.BUTTON3, "GamepadCameraOffsetSecureDrag", "the key's route stays")
     game.combat = false
 end)
 
 test("out of a fight the secure button leaves the D-pad alone (OffsetKeys takes it)", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     GamepadCameraOffset.CombatDPad.dragButton:SecureClick(true)
-    eq(game.bindings.PADDRIGHT, nil)
+    expectEqual(game.bindings.PADDRIGHT, nil)
     GamepadCameraOffset.CombatDPad.dragButton:SecureClick(false)
 end)
 
 test("step size: a slider, 20% until changed", function()
     boot(false, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
-    eq(GamepadCameraOffsetDB.stepSize, 20, "default")
+    expectEqual(GamepadCameraOffsetDB.stepSize, 20, "default")
     keys.Step(1, "down"); keys.Step(1, "up")
-    eq(GamepadCameraOffsetDB.side, 20, "a 20% step")
+    expectEqual(GamepadCameraOffsetDB.side, 20, "a 20% step")
     set("stepSize", 35)
     keys.Step(1, "down"); keys.Step(1, "up")
-    eq(GamepadCameraOffsetDB.side, 35, "onto the 35% steps")
-    eq(game.options.stepSize.format(35), "35%")
+    expectEqual(GamepadCameraOffsetDB.side, 35, "onto the 35% steps")
+    expectEqual(game.options.stepSize.format(35), "35%")
 end)
 
 test("a Key Bindings button: opens the game's page at AddOns, that section opened up", function()
@@ -458,10 +460,10 @@ test("a Key Bindings button: opens the game's page at AddOns, that section opene
     local button
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Side offset keys" then button = initializer end end
     assert(button, "the button is on the page")
-    eq(button.buttonText, "Key Bindings")
+    expectEqual(button.buttonText, "Key Bindings")
     button.onClick()
-    eq(opened[1], 7); eq(opened[2], "AddOns")
-    eq(addonsSection.data.expanded, true)
+    expectEqual(opened[1], 7); expectEqual(opened[2], "AddOns")
+    expectEqual(addonsSection.data.expanded, true)
 end)
 
 -- The frame that takes the controller while Hold & drag is held.
@@ -473,36 +475,36 @@ end
 
 test("hold & drag on a controller: the left stick and the D-pad move it, the stick taken from walking", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, stepSize = 10 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
     keys.Drag("down")
-    eq(taker.takesStick, true, "stick taken while held"); eq(taker.takesButtons, true)
-    eq(taker.scripts.OnGamePadStick(taker, "Movement", 1, 0), false, "the left stick: used, not walked with")
-    eq(taker.scripts.OnGamePadStick(taker, "Camera", 1, 0), true, "the right stick: the game's")
+    expectEqual(taker.takesStick, true, "stick taken while held"); expectEqual(taker.takesButtons, true)
+    expectEqual(taker.scripts.OnGamePadStick(taker, "Movement", 1, 0), false, "the left stick: used, not walked with")
+    expectEqual(taker.scripts.OnGamePadStick(taker, "Camera", 1, 0), true, "the right stick: the game's")
     tick(0.25)
-    eq(GamepadCameraOffsetDB.side, 25, "pushed all the way: 100% a second")
+    expectEqual(GamepadCameraOffsetDB.side, 25, "pushed all the way: 100% a second")
     taker.scripts.OnGamePadStick(taker, "Movement", -0.5, 0)
     tick(0.1); tick(0.1)
-    eq(GamepadCameraOffsetDB.side, 15, "half-way left: slower, fractions kept")
+    expectEqual(GamepadCameraOffsetDB.side, 15, "half-way left: slower, fractions kept")
     taker.scripts.OnGamePadStick(taker, "Movement", 0, 0)
     taker.scripts.OnGamePadButtonDown(taker, "PADDRIGHT")
-    eq(GamepadCameraOffsetDB.side, 20, "D-pad: a step")
+    expectEqual(GamepadCameraOffsetDB.side, 20, "D-pad: a step")
     tick(0.5)
-    eq(GamepadCameraOffsetDB.side, 30, "held: repeats")
+    expectEqual(GamepadCameraOffsetDB.side, 30, "held: repeats")
     taker.scripts.OnGamePadButtonUp(taker, "PADDRIGHT")
     tick(1)
-    eq(GamepadCameraOffsetDB.side, 30, "D-pad let go")
-    eq(taker.takesStick, true, "still held")
+    expectEqual(GamepadCameraOffsetDB.side, 30, "D-pad let go")
+    expectEqual(taker.takesStick, true, "still held")
     taker.scripts.OnGamePadButtonUp(taker, "PADRSTICK")
-    eq(taker.takesStick, false, "the click let go: the controller is the game's again")
-    eq(taker.takesButtons, false)
-    eq(taker.shown, false)
+    expectEqual(taker.takesStick, false, "the click let go: the controller is the game's again")
+    expectEqual(taker.takesButtons, false)
+    expectEqual(taker.shown, false)
 end)
 
 test("Stop at center on: hold & drag stops there for a moment, with a buzz on the controller", function()
     boot(true, { enabled = true, side = 30, tilt = 0, lookDown = 0, centerHold = true })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local vibrations = {}
     _G.C_GamePad = { SetVibration = function(kind) vibrations[#vibrations + 1] = kind end, StopVibration = function() end }
     local keys = GamepadCameraOffset.OffsetKeys
@@ -510,144 +512,144 @@ test("Stop at center on: hold & drag stops there for a moment, with a buzz on th
     keys.Drag("down")
     taker.scripts.OnGamePadStick(taker, "Movement", -1, 0)
     tick(0.4)
-    eq(GamepadCameraOffsetDB.side, 0, "crossing the center: stops there")
-    eq(#vibrations, 1, "a buzz")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "crossing the center: stops there")
+    expectEqual(#vibrations, 1, "a buzz")
     tick(0.05)
-    eq(GamepadCameraOffsetDB.side, 0, "held a moment")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "held a moment")
     tick(0.15)
-    eq(GamepadCameraOffsetDB.side, -5, "then on: 20% moved, 15% held")
-    eq(#vibrations, 1, "one buzz")
+    expectEqual(GamepadCameraOffsetDB.side, -5, "then on: 20% moved, 15% held")
+    expectEqual(#vibrations, 1, "one buzz")
     keys.Drag("up")
     _G.C_GamePad = nil
 end)
 
 test("Stop at center: off until you turn it on, then a drag past the center stops there", function()
     boot(false, { enabled = true, side = 50, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(GamepadCameraOffsetDB.centerHold, false, "off for new players")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(GamepadCameraOffsetDB.centerHold, false, "off for new players")
     local keys = GamepadCameraOffset.OffsetKeys
     game.cursorX = 500
     keys.Drag("down")
     game.cursorX = 500 - 1000   -- half the screen left: 100%
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, -50, "off: straight through the center")
+    expectEqual(GamepadCameraOffsetDB.side, -50, "off: straight through the center")
     keys.Drag("up")
     set("centerHold", true)
     game.cursorX = 500
     keys.Drag("down")
     game.cursorX = 500 + 1000
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 0, "on: stops at the center")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "on: stops at the center")
     keys.Drag("up")
 end)
 
 test("hold & drag starting at the center leaves it at once", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
     keys.Drag("down")
     taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
     tick(0.1)
-    eq(GamepadCameraOffsetDB.side, 10)
+    expectEqual(GamepadCameraOffsetDB.side, 10)
     keys.Drag("up")
 end)
 
 test("drag speed: 300% makes the left stick three times faster", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 300 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
     keys.Drag("down")
     taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
     tick(0.25)
-    eq(GamepadCameraOffsetDB.side, 75, "25 at Normal")
+    expectEqual(GamepadCameraOffsetDB.side, 75, "25 at Normal")
     keys.Drag("up")
 end)
 
 test("hold & drag: in combat only the mouse; a fight starting gives the controller back", function()
     boot(true, { enabled = true, side = 0, tilt = 0, lookDown = 0 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     local taker = controllerTaker()
     keys.Drag("down")
-    eq(taker.takesStick, true)
+    expectEqual(taker.takesStick, true)
     taker.script(taker, "PLAYER_REGEN_DISABLED")
-    eq(taker.takesStick, false, "given back before the lock")
+    expectEqual(taker.takesStick, false, "given back before the lock")
     game.combat = true
     keys.Drag("down")
-    eq(taker.takesStick, false, "not taken in combat")
+    expectEqual(taker.takesStick, false, "not taken in combat")
     game.cursorX = 500 + 200
     tick(0.016)
-    eq(GamepadCameraOffsetDB.side, 20, "the mouse still works")
+    expectEqual(GamepadCameraOffsetDB.side, 20, "the mouse still works")
     keys.Drag("up")
-    eq(taker.shown, false)
+    expectEqual(taker.shown, false)
 end)
 
 test("left and right keys: a step each press, repeating while held, back onto the steps", function()
     boot(false, { enabled = true, side = 37, tilt = 0, lookDown = 0, stepSize = 10 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     local keys = GamepadCameraOffset.OffsetKeys
     keys.Step(1, "down")
-    eq(GamepadCameraOffsetDB.side, 40, "37 onto the next step")
+    expectEqual(GamepadCameraOffsetDB.side, 40, "37 onto the next step")
     tick(0.3)
-    eq(GamepadCameraOffsetDB.side, 40, "not yet repeating")
+    expectEqual(GamepadCameraOffsetDB.side, 40, "not yet repeating")
     tick(0.2)
-    eq(GamepadCameraOffsetDB.side, 50, "held: repeats")
+    expectEqual(GamepadCameraOffsetDB.side, 50, "held: repeats")
     tick(0.1)
-    eq(GamepadCameraOffsetDB.side, 60)
+    expectEqual(GamepadCameraOffsetDB.side, 60)
     keys.Step(1, "up")
     tick(1)
-    eq(GamepadCameraOffsetDB.side, 60, "let go: stops")
+    expectEqual(GamepadCameraOffsetDB.side, 60, "let go: stops")
     keys.Step(-1, "down"); keys.Step(-1, "up")
-    eq(GamepadCameraOffsetDB.side, 50)
+    expectEqual(GamepadCameraOffsetDB.side, 50)
     GamepadCameraOffsetDB.side = 100
     keys.Step(1, "down"); keys.Step(1, "up")
-    eq(GamepadCameraOffsetDB.side, 100, "never past 100%")
+    expectEqual(GamepadCameraOffsetDB.side, 100, "never past 100%")
 end)
 
 test("disabling puts the game's camera back: controller temp values, else none", function()
     boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("enabled", false)
-    eq(get("test_cameraOverShoulder"), "0")
-    eq(get("test_cameraDynamicPitchBaseFovPad"), "0.4", "game default")
-    eq(game.temp.CameraKeepCharacterCentered, "1", "the controller's own value back")
+    expectEqual(get("test_cameraOverShoulder"), "0")
+    expectEqual(get("test_cameraDynamicPitchBaseFovPad"), "0.4", "game default")
+    expectEqual(game.temp.CameraKeepCharacterCentered, "1", "the controller's own value back")
     C_CVar.SetTempCVar("CameraKeepCharacterCentered", "1")
-    eq(#game.timers, 0, "disabled: the game's centering is left alone")
+    expectEqual(#game.timers, 0, "disabled: the game's centering is left alone")
 
     boot(false, { enabled = true, side = 30, tilt = 20 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("enabled", false)
-    eq(game.temp.CameraKeepCharacterCentered, nil, "keyboard: no temp value left")
-    eq(get("CameraKeepCharacterCentered"), "1")
+    expectEqual(game.temp.CameraKeepCharacterCentered, nil, "keyboard: no temp value left")
+    expectEqual(get("CameraKeepCharacterCentered"), "1")
 end)
 
 test("disabled at login touches nothing", function()
     boot(true, { enabled = false, side = 30, tilt = 20 })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(get("test_cameraOverShoulder"), "0")
-    eq(game.temp.CameraKeepCharacterCentered, "1")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(get("test_cameraOverShoulder"), "0")
+    expectEqual(game.temp.CameraKeepCharacterCentered, "1")
 end)
 
-local function near(a, b, msg) if math.abs(a - b) > 0.01 then error((msg or "") .. ": expected " .. b .. ", got " .. a, 2) end end
+local function near(actual, expected, message) if math.abs(actual - expected) > 0.01 then error((message or "") .. ": expected " .. expected .. ", got " .. actual, 2) end end
 
 local function onUpdateFramesShown()
     local count = 0
-    for _, f in ipairs(game.frames) do if f.update and f.shown then count = count + 1 end end
+    for _, fakeFrame in ipairs(game.frames) do if fakeFrame.update and fakeFrame.shown then count = count + 1 end end
     return count
 end
 
 test("no crosshair color here any more: the dot keeps its own, /gco color opens the settings, 1.0's saved color dropped", function()
     boot(true, { crosshairColor = "FF3030FF" })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(GamepadCameraOffsetDB.crosshairColor, nil, "1.0's saved color dropped")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(GamepadCameraOffsetDB.crosshairColor, nil, "1.0's saved color dropped")
     local color = GamepadReticle.Icons.StandardIcon.color
-    eq(table.concat(color, " "), "1 1 1 1", "the dot's color untouched")
-    eq(game.swatch, nil, "no color swatch on the page")
+    expectEqual(table.concat(color, " "), "1 1 1 1", "the dot's color untouched")
+    expectEqual(game.swatch, nil, "no color swatch on the page")
     SlashCmdList.GAMEPADCAMERAOFFSET("color FF3030FF")
-    eq(game.opened, 42, "/gco color: just the settings")
-    eq(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
+    expectEqual(game.opened, 42, "/gco color: just the settings")
+    expectEqual(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
 end)
 
 -- The popup (Popup.lua): shown or nil, its buttons' texts, and a click on one.
@@ -666,41 +668,41 @@ end
 
 test("the reticle isn't moved here any more: the game's own place, whatever the target", function()
     boot(true, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     game.units.target = true; game.nameplates.target = {}
-    game.fire("PLAYER_TARGET_CHANGED"); frame()
-    eq(GamepadReticle.point, nil, "never touched")
-    eq(game.recenters, 0)
+    game.fire("PLAYER_TARGET_CHANGED"); runNextFrame()
+    expectEqual(GamepadReticle.point, nil, "never touched")
+    expectEqual(game.recenters, 0)
 end)
 
 test("without Gamepad Reticle On Target: a button shows its link to copy; with it, no button", function()
     boot(true, nil)
     local button
     for _, initializer in ipairs(game.buttons) do if initializer.name == "Reticle on your target" then button = initializer end end
-    eq(button and button.buttonText, "Get the addon")
+    expectEqual(button and button.buttonText, "Get the addon")
     button.onClick()
     local box = popup()
-    eq(box.editBox:GetText(), "https://www.curseforge.com/projects/1819101")
-    eq(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
-    eq(popupButtons(), "Close, [secure] Reload", "a Reload for once it's installed")
+    expectEqual(box.editBox:GetText(), "https://www.curseforge.com/projects/1819101")
+    expectEqual(box.editBox.highlighted, true, "selected, ready for Ctrl+C")
+    expectEqual(popupButtons(), "Close, [secure] Reload", "a Reload for once it's installed")
     clickPopup("Close")
-    eq(popup(), nil, "closed")
+    expectEqual(popup(), nil, "closed")
     boot(true, nil, false, { reticleAddonInstalled = true })
-    for _, initializer in ipairs(game.buttons) do eq(initializer.name ~= "Reticle on your target", true, "installed: no button") end
+    for _, initializer in ipairs(game.buttons) do expectEqual(initializer.name ~= "Reticle on your target", true, "installed: no button") end
 end)
 
 test("settings left by earlier versions are dropped quietly: no popup, the camera settings kept", function()
     boot(true, { enabled = true, side = 30, crosshairColor = "FF3030FF", crosshair = true, aim = -5, nameplatesAsked = true })
-    eq(GamepadCameraOffsetDB.crosshair, nil); eq(GamepadCameraOffsetDB.aim, nil); eq(GamepadCameraOffsetDB.nameplatesAsked, nil)
-    eq(GamepadCameraOffsetDB.crosshairColor, nil)
-    eq(GamepadCameraOffsetDB.side, 30, "the camera settings kept")
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
-    eq(popup(), nil, "nothing said")
+    expectEqual(GamepadCameraOffsetDB.crosshair, nil); expectEqual(GamepadCameraOffsetDB.aim, nil); expectEqual(GamepadCameraOffsetDB.nameplatesAsked, nil)
+    expectEqual(GamepadCameraOffsetDB.crosshairColor, nil)
+    expectEqual(GamepadCameraOffsetDB.side, 30, "the camera settings kept")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(popup(), nil, "nothing said")
 end)
 
 -- /gco debug: the in-game suite, run here against the fake game.
 local function runUntilNoTimersLeft()
-    for _ = 1, 200 do if #game.timers == 0 then return end; frame() end
+    for _ = 1, 200 do if #game.timers == 0 then return end; runNextFrame() end
     error("the debug run never ended")
 end
 local function describeSavedSettings()
@@ -710,11 +712,11 @@ end
 
 test("/gco debug on a controller: every check passes, settings come back, findings saved", function()
     boot(true, { enabled = true, side = 30, tilt = 20 })
-    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     runUntilNoTimersLeft()
     local runs = GamepadCameraOffsetDebugDB.runs
-    eq(#runs, 1, "one run saved")
+    expectEqual(#runs, 1, "one run saved")
     local run = runs[1]
     for _, check in ipairs(run.checks) do
         if check.result ~= "pass" then
@@ -722,74 +724,74 @@ test("/gco debug on a controller: every check passes, settings come back, findin
                 .. " got " .. tostring(check.actual) .. " " .. tostring(check.note))
         end
     end
-    eq(run.failed, 0); eq(run.skipped, 0); eq(run.passed > 20, true, "passed " .. run.passed)
-    eq(run.environment.controllerUI, true); eq(run.environment.build, "70959"); eq(run.environment.settings.side, 30)
-    eq(describeSavedSettings(), "true 30 20", "your settings back")
-    eq(get("test_cameraOverShoulder"), "0.9", "and applied")
-    eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
+    expectEqual(run.failed, 0); expectEqual(run.skipped, 0); expectEqual(run.passed > 20, true, "passed " .. run.passed)
+    expectEqual(run.environment.controllerUI, true); expectEqual(run.environment.build, "70959"); expectEqual(run.environment.settings.side, 30)
+    expectEqual(describeSavedSettings(), "true 30 20", "your settings back")
+    expectEqual(get("test_cameraOverShoulder"), "0.9", "and applied")
+    expectEqual(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
     local reloadBox = popup()
-    eq(reloadBox ~= nil, true, "reload popup shown")
-    eq(reloadBox.reloadButton.attributes.macrotext, "/reload"); eq(reloadBox.reloadButton.template, "SecureActionButtonTemplate,UIPanelButtonTemplate")
-    eq(popupButtons(), "Later, [secure] Reload")
-    clickPopup("Later"); eq(popup(), nil, "Later hides it")
+    expectEqual(reloadBox ~= nil, true, "reload popup shown")
+    expectEqual(reloadBox.reloadButton.attributes.macrotext, "/reload"); expectEqual(reloadBox.reloadButton.template, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+    expectEqual(popupButtons(), "Later, [secure] Reload")
+    clickPopup("Later"); expectEqual(popup(), nil, "Later hides it")
 end)
 
 test("/gco debug on keyboard: the controller checks skipped, the rest pass", function()
     boot(false, nil)
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
     runUntilNoTimersLeft()
     local run = GamepadCameraOffsetDebugDB.runs[1]
-    eq(run.failed, 0); eq(run.skipped > 0, true)
+    expectEqual(run.failed, 0); expectEqual(run.skipped > 0, true)
     for _, check in ipairs(run.checks) do
-        if check.result == "skip" then eq(check.note, "controller UI off") end
+        if check.result == "skip" then expectEqual(check.note, "controller UI off") end
     end
 end)
 
 test("/gco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
     boot(true, { enabled = true, side = 30, tilt = 20 }, false,
         { enemies = "1", friends = "1", classColors = "1" })
-    game.fire("PLAYER_ENTERING_WORLD"); frame()
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    frame(); frame()
+    runNextFrame(); runNextFrame()
     game.combat = true
     game.fire("PLAYER_REGEN_DISABLED")
-    eq(GamepadCameraOffsetDebugDB.runs[1].stopped, "combat")
-    eq(describeSavedSettings(), "true 30 20")
-    eq(popup(), nil, "no popup in combat")
+    expectEqual(GamepadCameraOffsetDebugDB.runs[1].stopped, "combat")
+    expectEqual(describeSavedSettings(), "true 30 20")
+    expectEqual(popup(), nil, "no popup in combat")
     runUntilNoTimersLeft()
-    eq(#GamepadCameraOffsetDebugDB.runs, 1, "nothing ran after the stop")
+    expectEqual(#GamepadCameraOffsetDebugDB.runs, 1, "nothing ran after the stop")
     game.combat = false
     game.fire("PLAYER_REGEN_ENABLED")
-    eq(popup() ~= nil, true, "shown once the fight is over")
+    expectEqual(popup() ~= nil, true, "shown once the fight is over")
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    eq(#game.timers > 0, true, "and out of combat it runs again")
+    expectEqual(#game.timers > 0, true, "and out of combat it runs again")
 end)
 
 test("/gco debug: refused in combat; last and clear", function()
     boot(true, nil)
     game.combat = true
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    eq(GamepadCameraOffsetDebugDB, nil, "nothing started, nothing saved")
-    eq(game.printed[#game.printed]:match("not in combat") ~= nil, true)
+    expectEqual(GamepadCameraOffsetDebugDB, nil, "nothing started, nothing saved")
+    expectEqual(game.printed[#game.printed]:match("not in combat") ~= nil, true)
     game.combat = false
     SlashCmdList.GAMEPADCAMERAOFFSET("debug last")
-    eq(game.printed[#game.printed]:match("no saved run") ~= nil, true)
+    expectEqual(game.printed[#game.printed]:match("no saved run") ~= nil, true)
     SlashCmdList.GAMEPADCAMERAOFFSET("debug"); runUntilNoTimersLeft()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug last")
-    eq(game.printed[#game.printed]:match("0 failed") ~= nil, true, game.printed[#game.printed])
+    expectEqual(game.printed[#game.printed]:match("0 failed") ~= nil, true, game.printed[#game.printed])
     SlashCmdList.GAMEPADCAMERAOFFSET("debug clear")
-    eq(#GamepadCameraOffsetDebugDB.runs, 0)
+    expectEqual(#GamepadCameraOffsetDebugDB.runs, 0)
     SlashCmdList.GAMEPADCAMERAOFFSET("")
-    eq(game.opened, 42, "plain /gco still opens the settings")
+    expectEqual(game.opened, 42, "plain /gco still opens the settings")
 end)
 
 test("a reload in the middle of a run: your settings are back at the next login", function()
     boot(true, { enabled = true, side = -100, height = 0 })
     GamepadCameraOffsetDebugDB = { runs = {}, settingsToRestore = { enabled = true, side = 30, tilt = 20 } }
     game.fire("PLAYER_LOGIN")
-    eq(describeSavedSettings(), "true 30 20")
-    eq(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
+    expectEqual(describeSavedSettings(), "true 30 20")
+    expectEqual(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
 end)
 
 -- The release zip (BigWigs packager, .github/workflows/release.yml) leaves the
@@ -806,30 +808,30 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    eq(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    expectEqual(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
     local file = assert(io.open("GamepadCameraOffset.toc")); local toc = file:read("*a"); file:close()
-    eq(toc:match("## Category: ([^\r\n]+)"), "Gamepad")
+    expectEqual(toc:match("## Category: ([^\r\n]+)"), "Gamepad")
 end)
 
 test("without Debug.lua (the release), the addon works and /gco debug opens the settings", function()
     boot(true, moved(), true)
-    eq(GamepadCameraOffset.Debug, nil)
+    expectEqual(GamepadCameraOffset.Debug, nil)
     game.fire("PLAYER_ENTERING_WORLD")
-    frame()
-    eq(C_CVar.GetCVar("CameraKeepCharacterCentered"), "0", "the camera offset still applies")
+    runNextFrame()
+    expectEqual(C_CVar.GetCVar("CameraKeepCharacterCentered"), "0", "the camera offset still applies")
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    eq(game.opened, 42, "/gco debug opens the settings page")
+    expectEqual(game.opened, 42, "/gco debug opens the settings page")
 end)
 
 test("its icon in the AddOns list: Media/icon-64.png, shipped", function()
     local function readBytes(path) local file = assert(io.open(path, "rb")); local text = file:read("*a"); file:close(); return text end
     local toc = readBytes("GamepadCameraOffset.toc"):gsub("\r", "")
-    eq(toc:match("## IconTexture: ([^\n]+)"), "Interface\\AddOns\\GamepadCameraOffset\\Media\\icon-64.png")
-    eq(readBytes("Media/icon-64.png"):sub(2, 4), "PNG", "a PNG file")
-    eq(readBytes(".pkgmeta"):find("- Media/icon-64.png", 1, true), nil, "not left out of the release")
+    expectEqual(toc:match("## IconTexture: ([^\n]+)"), "Interface\\AddOns\\GamepadCameraOffset\\Media\\icon-64.png")
+    expectEqual(readBytes("Media/icon-64.png"):sub(2, 4), "PNG", "a PNG file")
+    expectEqual(readBytes(".pkgmeta"):find("- Media/icon-64.png", 1, true), nil, "not left out of the release")
 end)
 
 test("debug build: Gamepad Reticle On Target turned off counts as missing, to see its button; the release doesn't", function()
@@ -837,27 +839,27 @@ test("debug build: Gamepad Reticle On Target turned off counts as missing, to se
         for _, initializer in ipairs(game.buttons) do if initializer.name == "Reticle on your target" then return initializer end end
     end
     boot(true, nil, false, { reticleAddonOff = true })
-    eq(button() ~= nil, true, "turned off for this character: the button, as players without it see it")
+    expectEqual(button() ~= nil, true, "turned off for this character: the button, as players without it see it")
     boot(true, nil, true, { reticleAddonOff = true })
-    eq(button(), nil, "the release: installed is installed")
+    expectEqual(button(), nil, "the release: installed is installed")
     boot(true, nil, false, { reticleAddonInstalled = true })
-    eq(button(), nil, "debug build, turned on: no button")
+    expectEqual(button(), nil, "debug build, turned on: no button")
 end)
 
 test("a Get button for each missing sibling, in order after the Key Bindings one, each with its own CurseForge link", function()
     boot(true, nil)
     local names = {}
     for _, initializer in ipairs(game.buttons) do if initializer.buttonText then names[#names + 1] = initializer.name .. ": " .. initializer.buttonText end end
-    eq(table.concat(names, ", "), "Side offset keys: Key Bindings, Reticle on your target: Get the addon, Customize the reticle: Get the addon")
+    expectEqual(table.concat(names, ", "), "Side offset keys: Key Bindings, Reticle on your target: Get the addon, Customize the reticle: Get the addon")
     for _, initializer in ipairs(game.buttons) do
         if initializer.name == "Customize the reticle" then initializer.onClick() end
     end
-    eq(_G.GamepadCameraOffsetPopup.editBox:GetText(), "https://www.curseforge.com/projects/1818557")
+    expectEqual(_G.GamepadCameraOffsetPopup.editBox:GetText(), "https://www.curseforge.com/projects/1818557")
 end)
 
 test("saved keys the addon doesn't use are dropped, its settings kept", function()
     boot(true, { enabled = true, side = 30, height = 0, somethingElse = 1 })
-    eq(GamepadCameraOffsetDB.height, nil); eq(GamepadCameraOffsetDB.somethingElse, nil); eq(GamepadCameraOffsetDB.side, 30)
+    expectEqual(GamepadCameraOffsetDB.height, nil); expectEqual(GamepadCameraOffsetDB.somethingElse, nil); expectEqual(GamepadCameraOffsetDB.side, 30)
 end)
 
 reportLine(passed .. " passed, " .. failed .. " failed")
