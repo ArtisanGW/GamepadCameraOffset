@@ -2,7 +2,7 @@
 -- the screen what reaches the game (mouse and controller buttons, the binding's
 -- key down/up, the cursor and the side value) and keeps the last lines in
 -- GamepadCameraOffsetDebugDB.keyLog, written to disk on /reload.
--- Off at login; /gco debug keys turns it on or off.
+-- Off at login; /gpco debug keys turns it on or off.
 local Camera = _G.GamepadCameraOffset
 local OffsetKeys = Camera.OffsetKeys
 

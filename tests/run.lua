@@ -263,9 +263,9 @@ test("registers its page under Options > AddOns, with the game's own values as d
     expectEqual(game.options.tilt.format(35), "35% tilt"); expectEqual(game.options.tilt.format(0), "Off")
     expectEqual(game.options.aim, nil, "no reticle offset here any more")
     expectEqual(game.settings.GamepadCameraOffset_crosshair, nil, "no reticle setting either")
-    expectEqual(SLASH_GAMEPADCAMERAOFFSET1, "/gco"); expectEqual(SLASH_GAMEPADCAMERAOFFSET2, "/gamepadcameraoffset")
+    expectEqual(SLASH_GAMEPADCAMERAOFFSET1, "/gpco"); expectEqual(SLASH_GAMEPADCAMERAOFFSET2, "/gamepadcameraoffset")
     SlashCmdList.GAMEPADCAMERAOFFSET("")
-    expectEqual(game.opened, 42, "/gco opens it")
+    expectEqual(game.opened, 42, "/gpco opens it")
 end)
 
 test("with the defaults (the game's values), the game's camera is left alone: no ActionCam, still centered", function()
@@ -640,7 +640,7 @@ local function onUpdateFramesShown()
     return count
 end
 
-test("no crosshair color here any more: the dot keeps its own, /gco color opens the settings, 1.0's saved color dropped", function()
+test("no crosshair color here any more: the dot keeps its own, /gpco color opens the settings, 1.0's saved color dropped", function()
     boot(true, { crosshairColor = "FF3030FF" })
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     expectEqual(GamepadCameraOffsetDB.crosshairColor, nil, "1.0's saved color dropped")
@@ -648,7 +648,7 @@ test("no crosshair color here any more: the dot keeps its own, /gco color opens 
     expectEqual(table.concat(color, " "), "1 1 1 1", "the dot's color untouched")
     expectEqual(game.swatch, nil, "no color swatch on the page")
     SlashCmdList.GAMEPADCAMERAOFFSET("color FF3030FF")
-    expectEqual(game.opened, 42, "/gco color: just the settings")
+    expectEqual(game.opened, 42, "/gpco color: just the settings")
     expectEqual(table.concat(GamepadReticle.Icons.StandardIcon.color, " "), "1 1 1 1")
 end)
 
@@ -700,7 +700,7 @@ test("settings left by earlier versions are dropped quietly: no popup, the camer
     expectEqual(popup(), nil, "nothing said")
 end)
 
--- /gco debug: the in-game suite, run here against the fake game.
+-- /gpco debug: the in-game suite, run here against the fake game.
 local function runUntilNoTimersLeft()
     for _ = 1, 200 do if #game.timers == 0 then return end; runNextFrame() end
     error("the debug run never ended")
@@ -710,7 +710,7 @@ local function describeSavedSettings()
     return string.format("%s %s %s", tostring(saved.enabled), saved.side, saved.tilt)
 end
 
-test("/gco debug on a controller: every check passes, settings come back, findings saved", function()
+test("/gpco debug on a controller: every check passes, settings come back, findings saved", function()
     boot(true, { enabled = true, side = 30, tilt = 20 })
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
@@ -736,7 +736,7 @@ test("/gco debug on a controller: every check passes, settings come back, findin
     clickPopup("Later"); expectEqual(popup(), nil, "Later hides it")
 end)
 
-test("/gco debug on keyboard: the controller checks skipped, the rest pass", function()
+test("/gpco debug on keyboard: the controller checks skipped, the rest pass", function()
     boot(false, nil)
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
@@ -748,7 +748,7 @@ test("/gco debug on keyboard: the controller checks skipped, the rest pass", fun
     end
 end)
 
-test("/gco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
+test("/gpco debug: a fight stops it, settings come back, the box waits for the fight's end", function()
     boot(true, { enabled = true, side = 30, tilt = 20 }, false,
         { enemies = "1", friends = "1", classColors = "1" })
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
@@ -768,7 +768,7 @@ test("/gco debug: a fight stops it, settings come back, the box waits for the fi
     expectEqual(#game.timers > 0, true, "and out of combat it runs again")
 end)
 
-test("/gco debug: refused in combat; last and clear", function()
+test("/gpco debug: refused in combat; last and clear", function()
     boot(true, nil)
     game.combat = true
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
@@ -783,7 +783,7 @@ test("/gco debug: refused in combat; last and clear", function()
     SlashCmdList.GAMEPADCAMERAOFFSET("debug clear")
     expectEqual(#GamepadCameraOffsetDebugDB.runs, 0)
     SlashCmdList.GAMEPADCAMERAOFFSET("")
-    expectEqual(game.opened, 42, "plain /gco still opens the settings")
+    expectEqual(game.opened, 42, "plain /gpco still opens the settings")
 end)
 
 test("a reload in the middle of a run: your settings are back at the next login", function()
@@ -816,14 +816,14 @@ test("listed under Gamepad in the AddOns list, the game's own word", function()
     expectEqual(toc:match("## Category: ([^\r\n]+)"), "Gamepad")
 end)
 
-test("without Debug.lua (the release), the addon works and /gco debug opens the settings", function()
+test("without Debug.lua (the release), the addon works and /gpco debug opens the settings", function()
     boot(true, moved(), true)
     expectEqual(GamepadCameraOffset.Debug, nil)
     game.fire("PLAYER_ENTERING_WORLD")
     runNextFrame()
     expectEqual(C_CVar.GetCVar("CameraKeepCharacterCentered"), "0", "the camera offset still applies")
     SlashCmdList.GAMEPADCAMERAOFFSET("debug")
-    expectEqual(game.opened, 42, "/gco debug opens the settings page")
+    expectEqual(game.opened, 42, "/gpco debug opens the settings page")
 end)
 
 test("its icon in the AddOns list: Media/icon-64.png, shipped", function()

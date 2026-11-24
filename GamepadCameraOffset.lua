@@ -367,8 +367,8 @@ eventFrame:SetScript("OnEvent", function(_, event, name)
     end
 end)
 
--- /gco (or /gamepadcameraoffset) opens the settings.
-SLASH_GAMEPADCAMERAOFFSET1 = "/gco"
+-- /gpco (or /gamepadcameraoffset) opens the settings.
+SLASH_GAMEPADCAMERAOFFSET1 = "/gpco"
 SLASH_GAMEPADCAMERAOFFSET2 = "/gamepadcameraoffset"
 SlashCmdList.GAMEPADCAMERAOFFSET = function(message)
     local command, arguments = tostring(message or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")

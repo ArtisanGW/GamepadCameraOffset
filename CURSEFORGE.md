@@ -17,7 +17,7 @@ It's a simple tool with no dependencies:
 - Drag speed: how fast hold & drag moves it, with the mouse or the left stick
 - Stop at center: hold & drag stops at the center for a moment, with a short buzz on a controller
 - Step size: how far each step moves it (20% to start)
-- Settings in Options > AddOns > Gamepad Camera Offset, or /gco
+- Settings in Options > AddOns > Gamepad Camera Offset, or /gpco
 
 Every setting starts at the game's own value, so nothing changes until you move one. Set the camera where you want it and it stays there, through reloads and switches to the controller. It works with keyboard and mouse too.
 

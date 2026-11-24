@@ -2,7 +2,7 @@
 -- bindings on the controller's left stick directions and D-pad reach our
 -- buttons, or does the game keep them? If they reach us, a secure hold & drag
 -- button can set them in combat too (RestrictedFrames.lua:546, SetBindingClick).
--- /gco debug pad starts it (RUN_AT_LOGIN: a few seconds after each login): for PROBE_SECONDS
+-- /gpco debug pad starts it (RUN_AT_LOGIN: a few seconds after each login): for PROBE_SECONDS
 -- the keys below go to logging buttons, a timer shows the time left, then the
 -- bindings are cleared and a reload box writes GamepadCameraOffsetDebugDB.padProbe.
 local Camera = _G.GamepadCameraOffset

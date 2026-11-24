@@ -1,5 +1,9 @@
 # Gamepad Camera Offset
 
+## 1.3.0
+
+- The chat command is now /gpco (or /gamepadcameraoffset); /gco no longer works
+
 ## 1.2.1
 
 - Tidier code behind the scenes: nothing changes in game

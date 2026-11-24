@@ -1,11 +1,11 @@
--- /gco debug: an in-game test suite. It runs through the settings one step at a
+-- /gpco debug: an in-game test suite. It runs through the settings one step at a
 -- time (a step every Debug.SECONDS_BETWEEN_STEPS, so you can watch the camera
 -- move), checks what the game actually took (the CVars),
 -- puts your own settings back, and keeps the findings in
 -- GamepadCameraOffsetDebugDB, which the game writes to disk on /reload or logout.
---   /gco debug         runs the suite (out of combat)
---   /gco debug last    prints the last run's findings again
---   /gco debug clear   empties the saved runs
+--   /gpco debug         runs the suite (out of combat)
+--   /gpco debug last    prints the last run's findings again
+--   /gpco debug clear   empties the saved runs
 -- A fight stops the run (and puts your settings back). If a reload cuts a run
 -- short, your settings are put back at the next login.
 
@@ -175,7 +175,7 @@ local function countResults(run)
 end
 
 function Debug.PrintRun(run)
-    if not run then say("no saved run yet: /gco debug"); return end
+    if not run then say("no saved run yet: /gpco debug"); return end
     local counts = countResults(run)
     local stoppedNote = run.stopped and (" (stopped: " .. run.stopped .. ")") or ""
     say(string.format("%s: %d passed, %d failed, %d skipped%s", run.time or "?",
@@ -268,7 +268,7 @@ function Debug.Command(arguments)
         getDebugStore().runs = {}
         say("saved runs cleared")
     else
-        say("/gco debug (run the suite), /gco debug last, /gco debug clear")
+        say("/gpco debug (run the suite), /gpco debug last, /gpco debug clear")
     end
 end
 
