@@ -23,4 +23,5 @@ RelatedAddons.lua
 Debug.lua
 DebugKeys.lua
 DebugPadProbe.lua
+DebugSideProbe.lua
 #@end-do-not-package@

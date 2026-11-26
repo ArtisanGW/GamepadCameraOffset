@@ -159,7 +159,8 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         OpenToCategory = function(id) game.opened = id end,
     }
     _G.SlashCmdList = {}
-    _G.UIParent = { GetHeight = function() return 768 end, GetEffectiveScale = function() return 2 end }
+    _G.UIParent = { GetHeight = function() return 768 end, GetEffectiveScale = function() return 2 end,
+        CreateFontString = function() return newFakeRegion() end }
     game.cursorX = 500
     _G.GetCursorPosition = function() return game.cursorX, 300 end
     _G.GetScreenWidth = function() return 1000 end   -- 2000 pixels at scale 2
@@ -792,6 +793,48 @@ test("a reload in the middle of a run: your settings are back at the next login"
     game.fire("PLAYER_LOGIN")
     expectEqual(describeSavedSettings(), "true 30 20")
     expectEqual(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
+end)
+
+-- DebugSideProbe.lua: loaded on its own here, since it runs by itself at login.
+local function bootWithSideProbe(saved, debugStore)
+    boot(true, saved)
+    _G.GamepadCameraOffsetDebugDB = debugStore
+    _G.date = os.date
+    game.screenshots = 0
+    _G.Screenshot = function() game.screenshots = game.screenshots + 1 end
+    assert(loadfile("DebugSideProbe.lua"))("GamepadCameraOffset", {})
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
+end
+
+test("side probe: runs once after login, a shot at each side with the game's value, your side offset back", function()
+    bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
+    runUntilNoTimersLeft()
+    local run = GamepadCameraOffsetDebugDB.sideProbe
+    expectEqual(game.screenshots, 5)
+    expectEqual(run.shots[2].side, -100); expectEqual(run.shots[2].overShoulder, "-3")
+    expectEqual(run.shots[3].side, 100); expectEqual(run.shots[3].overShoulder, "3")
+    expectEqual(run.shots[2].zoom, 10)
+    expectEqual(run.runID, GamepadCameraOffset.DebugSideProbe.RUN_ID)
+    expectEqual(describeSavedSettings(), "true 30 20", "your side offset back")
+    expectEqual(get("test_cameraOverShoulder"), "0.9", "and applied")
+    expectEqual(run.sideToRestore, nil)
+    expectEqual(popupButtons(), "Later, [secure] Reload")
+    bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, GamepadCameraOffsetDebugDB)
+    runUntilNoTimersLeft()
+    expectEqual(game.screenshots, 0, "the same RUN_ID doesn't run again")
+end)
+
+test("side probe: a fight stops it, a reload mid-run puts your side offset back", function()
+    bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
+    runNextFrame(); runNextFrame()
+    expectEqual(GamepadCameraOffsetDB.side ~= 30, true, "running")
+    game.combat = true
+    game.fire("PLAYER_REGEN_DISABLED")
+    expectEqual(GamepadCameraOffsetDebugDB.sideProbe.stopped, "combat")
+    expectEqual(describeSavedSettings(), "true 30 20")
+    game.combat = false
+    bootWithSideProbe({ enabled = true, side = -100, tilt = 20 }, { sideProbe = { runID = 0, sideToRestore = 30 } })
+    expectEqual(GamepadCameraOffsetDB.side, 30, "put back at login")
 end)
 
 -- The release zip (BigWigs packager, .github/workflows/release.yml) leaves the

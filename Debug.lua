@@ -6,6 +6,7 @@
 --   /gpco debug         runs the suite (out of combat)
 --   /gpco debug last    prints the last run's findings again
 --   /gpco debug clear   empties the saved runs
+--   /gpco debug side    measures how far the camera goes to each side (DebugSideProbe.lua)
 -- A fight stops the run (and puts your settings back). If a reload cuts a run
 -- short, your settings are put back at the next login.
 
@@ -262,6 +263,8 @@ function Debug.Command(arguments)
         Debug.PrintRun(runs[#runs])
     elseif arguments == "pad" and Camera.DebugPadProbe then
         Camera.DebugPadProbe.Start()
+    elseif arguments == "side" and Camera.DebugSideProbe then
+        Camera.DebugSideProbe.Start()
     elseif arguments == "keys" and Camera.DebugKeys then
         Camera.DebugKeys.Toggle()
     elseif arguments == "clear" then
