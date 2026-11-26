@@ -15,7 +15,8 @@
 --          stick doesn't walk meanwhile. Both are blocked in combat: there the
 --          mouse works, and the D-pad through CombatDPad.lua. Any other
 --          controller button let go ends it, so the controller can never stay
---          taken. With Stop at center on, it stops at the center (CenterStop.lua).
+--          taken. With Stop at center on, it stops at the center (CenterStop.lua):
+--          the mouse for a moment, the left stick until it's let go.
 --   Left / Right: one step each press (the Step size slider); held, it keeps
 --          going, so a controller button works the same. With Stop at center
 --          on, a held step stops at the center: press again to go past it.
@@ -118,9 +119,9 @@ local function release()
     updater:Hide()
 end
 
--- A drag's move, in percent before Drag speed.
-local function dragBy(moved)
-    held.value = Camera.CenterStop.Move(held, moved, dragSpeed(), clampSide)
+-- A drag's move, in percent before Drag speed; byStick: the left stick moved it.
+local function dragBy(moved, byStick)
+    held.value = Camera.CenterStop.Move(held, moved, dragSpeed(), clampSide, byStick)
     OffsetKeys.SetSide(held.value)
 end
 
@@ -128,10 +129,11 @@ updater:SetScript("OnUpdate", function(_, elapsed)
     if not held then return release() end
     if held.drag then
         local x = cursorX()
-        local moved = (x - held.lastX) / screenWidth() * OffsetKeys.DRAG_PERCENT_PER_SCREEN
-            + held.stickX * OffsetKeys.STICK_PERCENT_PER_SECOND * elapsed
+        local stickPush = Camera.CenterStop.StickPush(held, held.stickX)
+        local stickMoved = stickPush * OffsetKeys.STICK_PERCENT_PER_SECOND * elapsed
+        local moved = (x - held.lastX) / screenWidth() * OffsetKeys.DRAG_PERCENT_PER_SCREEN + stickMoved
         held.lastX = x
-        if moved ~= 0 then dragBy(moved) end
+        if moved ~= 0 then dragBy(moved, stickMoved ~= 0) end
     end
     if held.direction then
         held.untilNext = held.untilNext - elapsed

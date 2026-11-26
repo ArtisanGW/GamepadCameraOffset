@@ -326,7 +326,7 @@ function Camera.RegisterSettings()
             function(value) return Camera.DragSpeedLabel(value) end))
     addSetting("centerHold", Settings.VarType.Boolean, "Stop at center",
         "The side offset stops at the center, so it's easy to get back to:\n"
-        .. "• Hold & drag: stops there for a moment\n"
+        .. "• Hold & drag: the mouse stops there for a moment, the left stick until you let it go\n"
         .. "• Left, Right held: stops there; press again to go past it\n\n"
         .. "On a controller, it also gives a short buzz.")
     addSetting("stepSize", Settings.VarType.Number, "Step size",

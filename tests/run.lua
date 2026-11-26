@@ -516,13 +516,39 @@ test("Stop at center on: hold & drag stops there for a moment, with a buzz on th
     tick(0.4)
     expectEqual(GamepadCameraOffsetDB.side, 0, "crossing the center: stops there")
     expectEqual(#vibrations, 1, "a buzz")
+    tick(1)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "the left stick still pushed: stays at the center")
+    taker.scripts.OnGamePadStick(taker, "Movement", -0.1, 0)
     tick(0.05)
-    expectEqual(GamepadCameraOffsetDB.side, 0, "held a moment")
-    tick(0.15)
-    expectEqual(GamepadCameraOffsetDB.side, -5, "then on: 20% moved, 15% held")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "let go")
+    taker.scripts.OnGamePadStick(taker, "Movement", -1, 0)
+    tick(0.1)
+    expectEqual(GamepadCameraOffsetDB.side, -10, "pushed again: past it at once")
     expectEqual(#vibrations, 1, "one buzz")
+    taker.scripts.OnGamePadStick(taker, "Movement", 1, 0)
+    tick(0.2)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "back the other way: stops again")
+    expectEqual(#vibrations, 2)
     keys.Drag("up")
     _G.C_GamePad = nil
+end)
+
+test("Stop at center on: the mouse stops there for a moment, then goes on", function()
+    boot(false, { enabled = true, side = 50, tilt = 0, lookDown = 0, centerHold = true })
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    local keys = GamepadCameraOffset.OffsetKeys
+    game.cursorX = 1000
+    keys.Drag("down")
+    game.cursorX = 1000 - 600   -- 60% left
+    tick(0.016)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "crossing the center: stops there")
+    game.cursorX = game.cursorX - 100
+    tick(0.016)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "held a moment")
+    game.cursorX = game.cursorX - 100
+    tick(0.016)
+    expectEqual(GamepadCameraOffsetDB.side, -5, "then on: 20% moved, 15% held")
+    keys.Drag("up")
 end)
 
 test("Stop at center: off until you turn it on, then a drag past the center stops there", function()
