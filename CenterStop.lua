@@ -3,6 +3,9 @@
 -- is moved (either way), with a short buzz on the controller, so you feel it's
 -- centered. Moves are counted before Drag speed: the hold feels the same at any
 -- speed. OffsetKeys.lua runs each drag move through CenterStop.Move.
+-- A held Left or Right step (a key, or the D-pad during hold & drag) stops
+-- repeating at the center, with the same buzz: the next press goes past it,
+-- so the center is easy to get back to without the settings.
 local Camera = _G.GamepadCameraOffset
 
 local CenterStop = {
@@ -22,6 +25,14 @@ local function buzz()
     if type(gamePad.StopVibration) == "function" then
         C_Timer.After(CenterStop.VIBRATION_SECONDS, function() pcall(gamePad.StopVibration) end)
     end
+end
+
+-- A step that landed on value: true when it's the center and Stop at center
+-- is on (then it buzzes), so the held step stops repeating there.
+function CenterStop.StopsStep(value)
+    if value ~= 0 or Camera.GetSettings().centerHold ~= true then return false end
+    buzz()
+    return true
 end
 
 -- drag: the held drag ({ value, centerHold }); moved: this move in percent,

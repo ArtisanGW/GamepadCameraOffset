@@ -15,7 +15,7 @@ It's a simple tool with no dependencies:
 - Tilt when looking down: how much of the tilt stays when you look down at your character
 - Keys for the side offset, in Key Bindings > AddOns: hold & drag, or step it left and right
 - Drag speed: how fast hold & drag moves it, with the mouse or the left stick
-- Stop at center: hold & drag stops at the center for a moment, with a short buzz on a controller
+- Stop at center: hold & drag stops at the center for a moment, and a held Left or Right step stops there until you press again, with a short buzz on a controller
 - Step size: how far each step moves it (20% to start)
 - Settings in Options > AddOns > Gamepad Camera Offset, or /gpco
 

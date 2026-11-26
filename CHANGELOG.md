@@ -3,6 +3,7 @@
 ## 1.3.0
 
 - The chat command is now /gpco (or /gamepadcameraoffset); /gco no longer works
+- Stop at center: a held Left or Right key (or the D-pad during hold & drag) stops at the center too; press again to go past it
 
 ## 1.2.1
 

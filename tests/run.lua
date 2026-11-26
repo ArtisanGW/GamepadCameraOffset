@@ -610,6 +610,40 @@ test("left and right keys: a step each press, repeating while held, back onto th
     expectEqual(GamepadCameraOffsetDB.side, 100, "never past 100%")
 end)
 
+test("Stop at center on: a held step stops at the center, with a buzz; the next press goes past it", function()
+    boot(false, { enabled = true, side = 30, tilt = 0, lookDown = 0, stepSize = 15, centerHold = true })
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    local vibrations = 0
+    _G.C_GamePad = { SetVibration = function() vibrations = vibrations + 1 end, StopVibration = function() end }
+    local keys = GamepadCameraOffset.OffsetKeys
+    keys.Step(-1, "down")
+    expectEqual(GamepadCameraOffsetDB.side, 15)
+    tick(0.5)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "held: repeats to the center")
+    expectEqual(vibrations, 1, "a buzz")
+    tick(1)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "still held: stays at the center")
+    keys.Step(-1, "up")
+    keys.Step(-1, "down")
+    expectEqual(GamepadCameraOffsetDB.side, -15, "pressed again: past it")
+    tick(0.5)
+    expectEqual(GamepadCameraOffsetDB.side, -30, "and on while held")
+    keys.Step(-1, "up")
+    keys.Step(1, "down"); keys.Step(1, "up")
+    keys.Step(1, "down")
+    expectEqual(GamepadCameraOffsetDB.side, 0, "a single press onto the center")
+    tick(1)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "doesn't repeat past it")
+    keys.Step(1, "up")
+    set("centerHold", false)
+    GamepadCameraOffsetDB.side = 15
+    keys.Step(-1, "down")
+    tick(0.5)
+    expectEqual(GamepadCameraOffsetDB.side, -15, "off: straight through the center")
+    keys.Step(-1, "up")
+    _G.C_GamePad = nil
+end)
+
 test("disabling puts the game's camera back: controller temp values, else none", function()
     boot(true, nil)
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()

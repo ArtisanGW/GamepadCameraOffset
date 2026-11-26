@@ -20,7 +20,8 @@
 -- "experimental feature" warning (Blizzard_Game/Shared/EventImplementation.lua,
 -- HandleExperimentalCVarConfirmationNeeded). Its Disable button clears them
 -- all, so the addon stops the game listening for that event with
--- GameEvent.UnregisterInternalEvent, the game's own way to drop an event, and hides the warning if it shows up some other way.
+-- GameEvent.UnregisterInternalEvent, the game's own way to drop an event, and hides the warning if it
+-- shows up some other way.
 local ADDON_NAME = ...
 
 local Camera = {
@@ -324,7 +325,9 @@ function Camera.RegisterSettings()
         sliderOptions(Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DRAG_SPEED_STEP,
             function(value) return Camera.DragSpeedLabel(value) end))
     addSetting("centerHold", Settings.VarType.Boolean, "Stop at center",
-        "Hold & drag stops at the center for a moment, so you know it's centered.\n\n"
+        "The side offset stops at the center, so it's easy to get back to:\n"
+        .. "• Hold & drag: stops there for a moment\n"
+        .. "• Left, Right held: stops there; press again to go past it\n\n"
         .. "On a controller, it also gives a short buzz.")
     addSetting("stepSize", Settings.VarType.Number, "Step size",
         "How far each step moves the side offset.\n\n"

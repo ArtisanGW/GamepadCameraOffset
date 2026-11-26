@@ -17,7 +17,8 @@
 --          controller button let go ends it, so the controller can never stay
 --          taken. With Stop at center on, it stops at the center (CenterStop.lua).
 --   Left / Right: one step each press (the Step size slider); held, it keeps
---          going, so a controller button works the same.
+--          going, so a controller button works the same. With Stop at center
+--          on, a held step stops at the center: press again to go past it.
 -- Each change goes through the slider's own setting, so the settings page,
 -- the saved value and the camera all follow.
 local Camera = _G.GamepadCameraOffset
@@ -66,7 +67,8 @@ end
 
 -- The Step size slider, in percent.
 local function stepSize()
-    return Camera.Clamp(Camera.GetSettings().stepSize, Camera.STEP_SIZE_MIN, Camera.STEP_SIZE_MAX, Camera.DEFAULTS.stepSize)
+    return Camera.Clamp(Camera.GetSettings().stepSize, Camera.STEP_SIZE_MIN, Camera.STEP_SIZE_MAX,
+        Camera.DEFAULTS.stepSize)
 end
 
 local function step(direction)
@@ -77,10 +79,17 @@ local function step(direction)
     if held and held.drag then held.value = sideValue() end
 end
 
+-- A step, and whether it repeats while held: not once it's at the center
+-- with Stop at center on, so the next press goes past it.
+local function stepAndRepeat(direction)
+    step(direction)
+    held.direction = not Camera.CenterStop.StopsStep(sideValue()) and direction or nil
+end
+
 -- A step now, then again and again while held.
 local function startStepping(direction)
-    step(direction)
-    held.direction, held.untilNext = direction, OffsetKeys.REPEAT_DELAY
+    stepAndRepeat(direction)
+    held.untilNext = OffsetKeys.REPEAT_DELAY
 end
 
 local function cursorX()
@@ -89,7 +98,8 @@ end
 
 -- The Drag speed slider, as a multiplier (1 = Normal).
 local function dragSpeed()
-    return Camera.Clamp(Camera.GetSettings().dragSpeed, Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX, Camera.DEFAULTS.dragSpeed) / 100
+    return Camera.Clamp(Camera.GetSettings().dragSpeed, Camera.DRAG_SPEED_MIN, Camera.DRAG_SPEED_MAX,
+        Camera.DEFAULTS.dragSpeed) / 100
 end
 
 local function screenWidth()
@@ -127,7 +137,7 @@ updater:SetScript("OnUpdate", function(_, elapsed)
         held.untilNext = held.untilNext - elapsed
         if held.untilNext <= 0 then
             held.untilNext = OffsetKeys.REPEAT_INTERVAL
-            step(held.direction)
+            stepAndRepeat(held.direction)
         end
     end
 end)
@@ -203,5 +213,6 @@ function OffsetKeys.AddButton(layout)
         function() pcall(OffsetKeys.OpenBindings) end,
         "Bind keys that move the side offset.\n\n"
         .. "• Hold & drag: hold it, then the mouse, the left stick or the D-pad\n"
-        .. "• Left, Right: a step each press; held, it keeps going", true))
+        .. "• Left, Right: a step each press; held, it keeps going until the center (with Stop at center)",
+        true))
 end
