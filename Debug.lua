@@ -7,6 +7,7 @@
 --   /gpco debug last    prints the last run's findings again
 --   /gpco debug clear   empties the saved runs
 --   /gpco debug side    measures how far the camera goes to each side (DebugSideProbe.lua)
+--   /gpco debug worldframe  whether moving the WorldFrame moves the picture up or down (DebugWorldFrameProbe.lua)
 -- A fight stops the run (and puts your settings back). If a reload cuts a run
 -- short, your settings are put back at the next login.
 
@@ -124,7 +125,9 @@ for _, lookDownPercent in ipairs({ 0, 50, 100 }) do
         changeSettings({ tilt = 50, lookDown = lookDownPercent })
         local label = "tilt when looking down " .. Camera.Label(lookDownPercent, "Default", "kept")
         local expected = lookDownPercent / 100
-        if lookDownPercent == 0 then expected = tonumber(Camera.GetCVarDefault(Camera.CVAR_PITCH_DOWN_SCALE, "0.25")) or 0.25 end
+        if lookDownPercent == 0 then
+            expected = tonumber(Camera.GetCVarDefault(Camera.CVAR_PITCH_DOWN_SCALE, "0.25")) or 0.25
+        end
         expectNear(label .. ": " .. Camera.CVAR_PITCH_DOWN_SCALE, expected,
             Camera.GetCVar(Camera.CVAR_PITCH_DOWN_SCALE))
     end)
@@ -164,7 +167,8 @@ end)
 -- ReloadUI() on this client: the popup's Reload (Popup.lua) is a secure /reload
 -- button; in a fight, the popup opens once it's over.
 local function showReloadBox(text)
-    Camera.Popup.Show({ text = text, buttons = { { text = RELOADUI or "Reload", reload = true }, { text = LATER or "Later" } } })
+    Camera.Popup.Show({ text = text,
+        buttons = { { text = RELOADUI or "Reload", reload = true }, { text = LATER or "Later" } } })
 end
 
 -- Results
@@ -265,6 +269,8 @@ function Debug.Command(arguments)
         Camera.DebugPadProbe.Start()
     elseif arguments == "side" and Camera.DebugSideProbe then
         Camera.DebugSideProbe.Start()
+    elseif arguments == "worldframe" and Camera.DebugWorldFrameProbe then
+        Camera.DebugWorldFrameProbe.Start()
     elseif arguments == "keys" and Camera.DebugKeys then
         Camera.DebugKeys.Toggle()
     elseif arguments == "clear" then

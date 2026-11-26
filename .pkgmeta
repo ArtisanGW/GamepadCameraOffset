@@ -13,6 +13,8 @@ ignore:
   - DebugPadProbe.lua
   # measures how far the camera goes to each side, with screenshots (dev builds only)
   - DebugSideProbe.lua
+  # whether moving the WorldFrame moves the picture up or down, with screenshots (dev builds only)
+  - DebugWorldFrameProbe.lua
   # the icon's source and its CurseForge size; the game uses Media/icon-64.png
   - Media/icon.svg
   - Media/icon-400.png

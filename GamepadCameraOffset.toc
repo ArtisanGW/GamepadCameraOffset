@@ -24,4 +24,5 @@ Debug.lua
 DebugKeys.lua
 DebugPadProbe.lua
 DebugSideProbe.lua
+DebugWorldFrameProbe.lua
 #@end-do-not-package@

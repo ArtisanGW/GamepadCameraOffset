@@ -183,6 +183,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     game.recenters = 0
     _G.GamepadReticle = {
         GetEffectiveScale = function() return 1.5 end,
+        IsShown = function() return true end,
         ClearAllPoints = function(self) self.point = nil end,
         SetPoint = function(self, point, relativeFrame, relativePoint, x, y) self.point = { point, relativePoint, x, y, relativeTo = relativeFrame } end,
         -- Like the game: anchored to a nameplate (a restricted region), it can't be measured.
@@ -835,6 +836,104 @@ test("side probe: a fight stops it, a reload mid-run puts your side offset back"
     game.combat = false
     bootWithSideProbe({ enabled = true, side = -100, tilt = 20 }, { sideProbe = { runID = 0, sideToRestore = 30 } })
     expectEqual(GamepadCameraOffsetDB.side, 30, "put back at login")
+end)
+
+-- DebugWorldFrameProbe.lua: loaded on its own, like the side probe. The fake
+-- WorldFrame covers the 1000 x 768 screen at scale 2 (2000 x 1536 pixels) and,
+-- as nameplates are its children, refuses to move in a fight.
+local function bootWithWorldFrameProbe(debugStore)
+    boot(true, { enabled = true, side = 30, tilt = 20 })
+    _G.GamepadCameraOffsetDebugDB = debugStore
+    _G.date = os.date
+    _G.GetScreenHeight = function() return 768 end
+    game.screenshots = 0
+    _G.Screenshot = function() game.screenshots = game.screenshots + 1 end
+    game.errors = {}
+    _G.geterrorhandler = function() return function(message) game.errors[#game.errors + 1] = message end end
+    local worldFrame = { anchors = {} }
+    function worldFrame:SetPoint(point, relativeTo, relativePoint, x, y)
+        if game.combat then error("WorldFrame:SetPoint(): blocked in combat") end
+        if type(relativeTo) == "number" then   -- the short form: point, x, y
+            relativeTo, relativePoint, x, y = nil, point, relativeTo, relativePoint
+        end
+        for index, anchor in ipairs(self.anchors) do
+            if anchor[1] == point then table.remove(self.anchors, index) break end
+        end
+        self.anchors[#self.anchors + 1] = { point, relativeTo, relativePoint, x, y }
+    end
+    function worldFrame:ClearAllPoints()
+        if game.combat then error("WorldFrame:ClearAllPoints(): blocked in combat") end
+        self.anchors = {}
+    end
+    function worldFrame:GetNumPoints() return #self.anchors end
+    function worldFrame:GetPoint(index) return unpack(self.anchors[index], 1, 5) end
+    function worldFrame:GetEffectiveScale() return 2 end
+    function worldFrame:IsProtected() return true, false end
+    local function offset(pointName)
+        for _, anchor in ipairs(worldFrame.anchors) do if anchor[1] == pointName then return anchor[5] end end
+        return 0
+    end
+    function worldFrame:GetTop() return 768 + offset("TOPLEFT") end
+    function worldFrame:GetBottom() return offset("BOTTOMRIGHT") end
+    function worldFrame:GetLeft() return 0 end
+    function worldFrame:GetRight() return 1000 end
+    worldFrame:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, 0)
+    worldFrame:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0)
+    _G.WorldFrame = worldFrame
+    assert(loadfile("DebugWorldFrameProbe.lua"))("GamepadCameraOffset", {})
+    game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
+end
+
+local function describeWorldFrame()
+    local parts = {}
+    for _, anchor in ipairs(WorldFrame.anchors) do
+        parts[#parts + 1] = string.format("%s %s %s %d", anchor[1], tostring(anchor[2]), anchor[3], anchor[5])
+    end
+    return table.concat(parts, ", ")
+end
+
+test("WorldFrame probe: runs once after login, a shot at each step with the edges the game took, the WorldFrame back", function()
+    bootWithWorldFrameProbe(nil)
+    runUntilNoTimersLeft()
+    local run = GamepadCameraOffsetDebugDB.worldFrameProbe
+    expectEqual(game.screenshots, #GamepadCameraOffset.DebugWorldFrameProbe.STEPS)
+    expectEqual(run.isProtected, true)
+    expectEqual(run.screenHeight, 1536)
+    expectEqual(run.edgesBefore.bottom, 0)
+    expectEqual(run.shots[1].edges.top, 1536, "normal")
+    expectEqual(run.shots[2].edges.bottom, -300, "bottom 300 px below the screen")
+    expectEqual(run.shots[3].edges.bottom, -600, "bottom 600 px below the screen")
+    expectEqual(run.shots[4].edges.top, 2136, "top 600 px above the screen")
+    expectEqual(run.shots[5].edges.bottom, 300, "inside the screen")
+    expectEqual(run.shots[2].placed, true)
+    expectEqual(run.shots[2].aimPoint.y, 480)
+    expectEqual(run.shots[2].zoom, 10)
+    expectEqual(run.runID, GamepadCameraOffset.DebugWorldFrameProbe.RUN_ID)
+    expectEqual(describeWorldFrame(), "TOPLEFT nil TOPLEFT 0, BOTTOMRIGHT nil BOTTOMRIGHT 0", "the game's anchors back")
+    expectEqual(run.anchorsToRestore, nil)
+    expectEqual(popupButtons(), "Later, [secure] Reload")
+    bootWithWorldFrameProbe(GamepadCameraOffsetDebugDB)
+    runUntilNoTimersLeft()
+    expectEqual(game.screenshots, 0, "the same RUN_ID doesn't run again")
+end)
+
+test("WorldFrame probe: a fight stops it, the WorldFrame comes back after it; a reload mid-run puts it back at login", function()
+    bootWithWorldFrameProbe(nil)
+    runNextFrame(); runNextFrame(); runNextFrame()
+    expectEqual(WorldFrame:GetBottom(), -150, "running: bottom 300 px below the screen")
+    game.combat = true
+    game.fire("PLAYER_REGEN_DISABLED")
+    expectEqual(GamepadCameraOffsetDebugDB.worldFrameProbe.stopped, "combat")
+    expectEqual(WorldFrame:GetBottom(), -150, "locked in the fight")
+    game.combat = false
+    game.fire("PLAYER_REGEN_ENABLED")
+    expectEqual(describeWorldFrame(), "TOPLEFT nil TOPLEFT 0, BOTTOMRIGHT nil BOTTOMRIGHT 0", "back after the fight")
+    expectEqual(#game.errors, 0)
+    bootWithWorldFrameProbe({ worldFrameProbe = { runID = 0, anchorsToRestore = {
+        { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 0, y = 0 },
+        { point = "BOTTOMRIGHT", relativePoint = "BOTTOMRIGHT", x = 0, y = 7 } } } })
+    expectEqual(describeWorldFrame(), "TOPLEFT nil TOPLEFT 0, BOTTOMRIGHT nil BOTTOMRIGHT 7", "put back at login")
+    expectEqual(GamepadCameraOffsetDebugDB.worldFrameProbe.anchorsToRestore, nil)
 end)
 
 -- The release zip (BigWigs packager, .github/workflows/release.yml) leaves the
