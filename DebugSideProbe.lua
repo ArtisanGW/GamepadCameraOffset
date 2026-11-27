@@ -1,21 +1,27 @@
--- Debug only, not for release (.pkgmeta). Measures how far the camera really
--- goes to each side: sends test_cameraOverShoulder each of YARDS (past the
--- side slider's SIDE_YARDS_AT_FULL too, to see where the game stops), waits for
--- the camera to settle, saves what the game took (test_cameraOverShoulder, the
--- zoom) and takes a screenshot (the game's Screenshots folder). Then it puts
--- your side offset back and shows a reload box that writes
+-- Debug only, not for release (.pkgmeta). Measures where your character sits
+-- on screen for a side offset: at each of ZOOMS, sends test_cameraOverShoulder
+-- each of SHARES of the zoom (in yards, past the side slider's
+-- SIDE_YARDS_AT_FULL too), waits for the camera to settle, saves what the game
+-- took (test_cameraOverShoulder, the zoom), where your own nameplate (the
+-- Personal Resource Display, turned on for the run) is across the screen, and
+-- takes a screenshot (the game's Screenshots folder). Then it puts your side
+-- offset, zoom and nameplate settings back and shows a reload box that writes
 -- GamepadCameraOffsetDebugDB.sideProbe.
 -- Runs by itself a few seconds after a login when RUN_ID changed (bump it to
 -- measure again after the next reload); /gpco debug side runs it now. A fight
--- stops it; your side offset comes back, after a reload mid-run too.
+-- stops it; your side offset and nameplate settings come back, after a reload
+-- mid-run too.
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 2,
+    RUN_ID = 3,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
-    YARDS = { 0, 3, 4.5, 6, 9, 12, 20, -6, -12 },
+    ZOOMS = { 5, 10, 20 },
+    SHARES = { 0, 0.3, 0.6 },   -- side offset in yards = share * zoom
+    -- Your own nameplate, on for the run: it follows your character across the screen.
+    NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
 Camera.DebugSideProbe = DebugSideProbe
 
@@ -57,10 +63,47 @@ local function hideScreenCapturedMessage(hidden)
     end
 end
 
+local function setCVar(name, value)
+    local setter = (C_CVar and C_CVar.SetCVar) or SetCVar
+    pcall(setter, name, tostring(value))
+end
+
 local function putSideBack(run)
-    if run.sideToRestore == nil then return end
-    Camera.OffsetKeys.SetSide(run.sideToRestore)
-    run.sideToRestore = nil
+    if run.sideToRestore ~= nil then
+        Camera.OffsetKeys.SetSide(run.sideToRestore)
+        run.sideToRestore = nil
+    end
+    for name, value in pairs(run.cvarsToRestore or {}) do setCVar(name, value) end
+    run.cvarsToRestore = nil
+end
+
+local function zoomTo(zoom)
+    local change = zoom - GetCameraZoom()
+    if change > 0 then pcall(CameraZoomOut, change) elseif change < 0 then pcall(CameraZoomIn, -change) end
+end
+
+-- Where your own nameplate's center is across the screen: -1 the left edge,
+-- 0 the center, 1 the right edge; nil without one.
+local function nameplateAcross()
+    local namePlates = _G.C_NamePlate
+    if type(namePlates) ~= "table" or type(namePlates.GetNamePlateForUnit) ~= "function" then return nil end
+    local succeeded, namePlate = pcall(namePlates.GetNamePlateForUnit, "player")
+    if not succeeded or not namePlate or not namePlate:IsVisible() then return nil end
+    local x = namePlate:GetCenter()
+    if not x then return nil end
+    local screenWidth = UIParent:GetWidth() * UIParent:GetEffectiveScale()
+    return (x * namePlate:GetEffectiveScale() - screenWidth / 2) / (screenWidth / 2)
+end
+
+-- Every (zoom, yards) pair to measure, in order.
+local function measurements()
+    local list = {}
+    for _, zoom in ipairs(DebugSideProbe.ZOOMS) do
+        for _, share in ipairs(DebugSideProbe.SHARES) do
+            list[#list + 1] = { zoom = zoom, yards = share * zoom }
+        end
+    end
+    return list
 end
 
 local function finish(stopReason)
@@ -69,6 +112,7 @@ local function finish(stopReason)
     run.stopped = stopReason
     run.runID = DebugSideProbe.RUN_ID
     putSideBack(run)
+    if run.zoomToRestore then zoomTo(run.zoomToRestore) end
     timerText:SetText("")
     hideScreenCapturedMessage(false)
     Camera.Popup.Show({ text = "Side offset measured.\n\nReload to save it.",
@@ -86,11 +130,14 @@ end
 
 local function measure(index)
     if not probe then return end
-    local yards = DebugSideProbe.YARDS[index]
-    if yards == nil then return finish() end
+    local list = measurements()
+    local measurement = list[index]
+    if measurement == nil then return finish() end
+    local yards = measurement.yards
+    zoomTo(measurement.zoom)
     sendYards(yards)
     local tookAtOnce = Camera.GetCVar(Camera.CVAR_OVER_SHOULDER)
-    local secondsLeft = (#DebugSideProbe.YARDS - index + 1) * (DebugSideProbe.SETTLE_SECONDS + DebugSideProbe.AFTER_SHOT_SECONDS)
+    local secondsLeft = (#list - index + 1) * (DebugSideProbe.SETTLE_SECONDS + DebugSideProbe.AFTER_SHOT_SECONDS)
     timerText:SetText(string.format("Side offset test: %d s left. Don't move.", math.ceil(secondsLeft)))
     C_Timer.After(DebugSideProbe.SETTLE_SECONDS, function()
         if not probe then return end
@@ -98,7 +145,9 @@ local function measure(index)
             yardsSent = yards,
             overShoulderAtOnce = tookAtOnce,
             overShoulder = Camera.GetCVar(Camera.CVAR_OVER_SHOULDER),
+            zoomSent = measurement.zoom,
             zoom = GetCameraZoom(),
+            nameplateAcross = nameplateAcross(),
             time = date("%H:%M:%S"),
         }
         Screenshot()
@@ -109,15 +158,21 @@ end
 function DebugSideProbe.Start()
     if probe then return end
     if InCombatLockdown() then return print("|cff88ccffgco debug|r side probe: not in combat") end
+    local cvarsToRestore = {}
+    for name in pairs(DebugSideProbe.NAMEPLATE_CVARS) do cvarsToRestore[name] = Camera.GetCVar(name) end
     probe = {
         time = date("%Y-%m-%d %H:%M:%S"),
         sideToRestore = Camera.GetSettings().side,
+        cvarsToRestore = cvarsToRestore,
+        zoomToRestore = GetCameraZoom(),
+        screenAspect = GetScreenWidth() / GetScreenHeight(),
         tilt = Camera.GetSettings().tilt,
         screenWidth = GetScreenWidth() * UIParent:GetEffectiveScale(),
         cameraCVars = cameraCVars(),
         shots = {},
     }
     getDebugStore().sideProbe = probe
+    for name, value in pairs(DebugSideProbe.NAMEPLATE_CVARS) do setCVar(name, value) end
     hideScreenCapturedMessage(true)
     measure(1)
 end
