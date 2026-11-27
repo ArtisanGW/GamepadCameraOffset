@@ -16,7 +16,7 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 6,
+    RUN_ID = 7,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
@@ -25,8 +25,10 @@ local DebugSideProbe = {
     SHARES = { 0, 0.3, 0.6 },   -- side offset in yards = share * zoom
     MAX_ZOOM = 10,
     -- RUN_ID 5: the picture moved up to 100, and was the same from 1000 to 10000.
-    -- Every 125 between, to find where it stops; 10000 to compare with.
-    MAX_YARDS = { 100, 125, 250, 375, 500, 625, 750, 875, 1000, 10000 },
+    -- RUN_ID 6 (every 125): it moved up to 250; from 375 the camera was back
+    -- near your character, the same picture from 500 to 1000.
+    -- Every 16 between 250 and 375, to find where it stops; 1000 to compare with.
+    MAX_YARDS = { 250, 266, 281, 297, 312, 328, 344, 359, 375, 1000 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
