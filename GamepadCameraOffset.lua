@@ -52,14 +52,22 @@ local Camera = {
     --           until you turn it on, as every option.
     --   stepSize: 5 to 50: how far a Left/Right key or a D-pad press moves the
     --           side offset (OffsetKeys.lua); 20 until you change it.
+    --   keepOnScreen: lowers the side offset while you're zoomed in, so your
+    --           character stays on screen (KeepOnScreen.lua); off until you turn it on.
     -- Every slider starts at the game's own value: nothing changes until you move one.
-    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100, stepSize = 20, centerHold = false },
-    SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 5,
+    DEFAULTS = { enabled = true, side = 0, tilt = 0, lookDown = 0, dragSpeed = 100, stepSize = 20, centerHold = false,
+        keepOnScreen = false },
+    SIDE_MIN = -100, SIDE_MAX = 100, SIDE_STEP = 2,
     TILT_MIN = 0, TILT_MAX = 100, TILT_STEP = 5,
     LOOK_DOWN_MIN = 0, LOOK_DOWN_MAX = 100, LOOK_DOWN_STEP = 5,
     DRAG_SPEED_MIN = 100, DRAG_SPEED_MAX = 500, DRAG_SPEED_STEP = 25,
     STEP_SIZE_MIN = 5, STEP_SIZE_MAX = 50, STEP_SIZE_STEP = 5,
-    SIDE_YARDS_AT_FULL = 3,       -- test_cameraOverShoulder at 100%
+    -- test_cameraOverShoulder at 100%. The game takes more (DebugSideProbe.lua
+    -- measured 20), but past 12 your character is off screen at any zoom.
+    SIDE_YARDS_AT_FULL = 12,
+    -- Saved side offsets are percentages of SIDE_YARDS_AT_FULL, saved with them as
+    -- sideYardsAtFull. Saves from before have none: 100% was 3 yd then.
+    SIDE_YARDS_AT_FULL_BEFORE = 3,
     -- The game's pitch pad works backwards: the lower it is, the more the camera
     -- tilts: 0.125 is the strongest usable tilt, by about 0.75 there's
     -- little left, and pad 0 is no tilt at all (so it's never sent). The tilt
@@ -118,12 +126,25 @@ local function clamp(value, minimum, maximum, fallback)
     return math.max(minimum, math.min(maximum, value))
 end
 
+-- A side offset saved when 100% was fewer (or more) yards: the percentage that
+-- keeps the camera where it was, whole as the slider's.
+local function rescaleSavedSide(settings)
+    local savedYardsAtFull = tonumber(settings.sideYardsAtFull) or Camera.SIDE_YARDS_AT_FULL_BEFORE
+    local side = tonumber(settings.side)
+    if side and savedYardsAtFull ~= Camera.SIDE_YARDS_AT_FULL then
+        local rescaled = math.floor(math.abs(side) * savedYardsAtFull / Camera.SIDE_YARDS_AT_FULL + 0.5)
+        settings.side = side < 0 and -rescaled or rescaled
+    end
+    settings.sideYardsAtFull = Camera.SIDE_YARDS_AT_FULL
+end
+
 local function getSettings()
     if type(GamepadCameraOffsetDB) ~= "table" then GamepadCameraOffsetDB = {} end
     local settings = GamepadCameraOffsetDB
+    rescaleSavedSide(settings)
     -- Saved keys this addon doesn't use: dropped.
     for key in pairs(settings) do
-        if Camera.DEFAULTS[key] == nil then settings[key] = nil end
+        if Camera.DEFAULTS[key] == nil and key ~= "sideYardsAtFull" then settings[key] = nil end
     end
     for key, defaultValue in pairs(Camera.DEFAULTS) do
         if settings[key] == nil then settings[key] = defaultValue end
@@ -184,7 +205,8 @@ function Camera.Apply()
     setTemporaryCVar(Camera.CVAR_REDUCE_MOVEMENT, 0)
 
     local sidePercent = clamp(settings.side, Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.DEFAULTS.side)
-    setCVar(Camera.CVAR_OVER_SHOULDER, sidePercent / 100 * Camera.SIDE_YARDS_AT_FULL)
+    setCVar(Camera.CVAR_OVER_SHOULDER,
+        Camera.KeepOnScreen.Yards(sidePercent / 100 * Camera.SIDE_YARDS_AT_FULL, settings.keepOnScreen == true))
 
     local tiltPercent = clamp(settings.tilt, Camera.TILT_MIN, Camera.TILT_MAX, Camera.DEFAULTS.tilt)
     local pitchPad = Camera.TiltPad(tiltPercent)
@@ -209,6 +231,7 @@ end
 function Camera.Remove()
     if not offsetsApplied then return end
     offsetsApplied = false
+    Camera.KeepOnScreen.Stop()
     if actionCameraOn then
         actionCameraOn = false
         runConsoleCommand(Camera.ACTION_CAMERA_OFF_COMMAND)
@@ -238,6 +261,7 @@ end
 Camera.GetSettings = getSettings
 Camera.Clamp = clamp
 Camera.GetCVar = getCVar
+Camera.SetCVar = setCVar
 Camera.GetCVarDefault = getCVarDefault
 Camera.IsControllerUIOn = isControllerUIOn
 
@@ -296,11 +320,14 @@ function Camera.RegisterSettings()
     addSetting("side", Settings.VarType.Number, "Side offset",
         "Moves the camera over your right or left shoulder.\n\n"
         .. "• Centered: the game's normal view\n"
-        .. "• 100%: the furthest it goes\n\n"
-        .. "The effect is stronger when you zoom in.\n\n"
+        .. "• 100%: the furthest it goes, 12 yards\n\n"
+        .. "The effect is stronger when you zoom in: far to the side, your character can leave the screen.\n\n"
         .. "Keys can move it too: see Side offset keys below.",
         sliderOptions(Camera.SIDE_MIN, Camera.SIDE_MAX, Camera.SIDE_STEP,
             function(value) return Camera.Label(value, "Centered", "right", "left") end))
+    addSetting("keepOnScreen", Settings.VarType.Boolean, "Keep character on screen",
+        "Lowers the side offset while you're zoomed in, so your character stays on screen.\n\n"
+        .. "Zoom back out and the side offset comes back.")
     addSetting("tilt", Settings.VarType.Number, "Tilt",
         "Tilts the camera up, so:\n"
         .. "• Your character sits lower on the screen\n"

@@ -4,7 +4,9 @@
 -- SIDE_YARDS_AT_FULL too), waits for the camera to settle, saves what the game
 -- took (test_cameraOverShoulder, the zoom), where your own nameplate (the
 -- Personal Resource Display, turned on for the run) is across the screen, and
--- takes a screenshot (the game's Screenshots folder). Then it puts your side
+-- takes a screenshot (the game's Screenshots folder). Then, at MAX_ZOOM, each
+-- of MAX_YARDS: how far the game lets the camera go (what it takes back, and
+-- whether the picture still moves). Then it puts your side
 -- offset, zoom and nameplate settings back and shows a reload box that writes
 -- GamepadCameraOffsetDebugDB.sideProbe.
 -- Runs by itself a few seconds after a login when RUN_ID changed (bump it to
@@ -14,12 +16,14 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 3,
+    RUN_ID = 4,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
     ZOOMS = { 5, 10, 20 },
     SHARES = { 0, 0.3, 0.6 },   -- side offset in yards = share * zoom
+    MAX_ZOOM = 10,
+    MAX_YARDS = { 20, 30, 50, 100, 1000 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
@@ -68,18 +72,21 @@ local function setCVar(name, value)
     pcall(setter, name, tostring(value))
 end
 
-local function putSideBack(run)
+local function zoomTo(zoom)
+    local change = zoom - GetCameraZoom()
+    if change > 0 then pcall(CameraZoomOut, change) elseif change < 0 then pcall(CameraZoomIn, -change) end
+end
+
+-- Your side offset, nameplate settings and zoom, as they were before the run.
+local function putSettingsBack(run)
     if run.sideToRestore ~= nil then
         Camera.OffsetKeys.SetSide(run.sideToRestore)
         run.sideToRestore = nil
     end
     for name, value in pairs(run.cvarsToRestore or {}) do setCVar(name, value) end
     run.cvarsToRestore = nil
-end
-
-local function zoomTo(zoom)
-    local change = zoom - GetCameraZoom()
-    if change > 0 then pcall(CameraZoomOut, change) elseif change < 0 then pcall(CameraZoomIn, -change) end
+    if run.zoomToRestore then zoomTo(run.zoomToRestore) end
+    run.zoomToRestore = nil
 end
 
 -- Where your own nameplate's center is across the screen: -1 the left edge,
@@ -103,6 +110,9 @@ local function measurements()
             list[#list + 1] = { zoom = zoom, yards = share * zoom }
         end
     end
+    for _, yards in ipairs(DebugSideProbe.MAX_YARDS) do
+        list[#list + 1] = { zoom = DebugSideProbe.MAX_ZOOM, yards = yards }
+    end
     return list
 end
 
@@ -110,9 +120,7 @@ local function finish(stopReason)
     local run = probe
     probe = nil
     run.stopped = stopReason
-    run.runID = DebugSideProbe.RUN_ID
-    putSideBack(run)
-    if run.zoomToRestore then zoomTo(run.zoomToRestore) end
+    putSettingsBack(run)
     timerText:SetText("")
     hideScreenCapturedMessage(false)
     Camera.Popup.Show({ text = "Side offset measured.\n\nReload to save it.",
@@ -124,6 +132,7 @@ end
 local function sendYards(yards)
     local sidePercent = (yards > 0 and Camera.SIDE_MAX) or (yards < 0 and Camera.SIDE_MIN) or 0
     Camera.OffsetKeys.SetSide(sidePercent)
+    Camera.KeepOnScreen.Stop()   -- it would put back the yards it limits
     local setter = (C_CVar and C_CVar.SetCVar) or SetCVar
     pcall(setter, Camera.CVAR_OVER_SHOULDER, tostring(yards))
 end
@@ -161,6 +170,7 @@ function DebugSideProbe.Start()
     local cvarsToRestore = {}
     for name in pairs(DebugSideProbe.NAMEPLATE_CVARS) do cvarsToRestore[name] = Camera.GetCVar(name) end
     probe = {
+        runID = DebugSideProbe.RUN_ID,   -- saved from the start: a reload mid-run doesn't run it again
         time = date("%Y-%m-%d %H:%M:%S"),
         sideToRestore = Camera.GetSettings().side,
         cvarsToRestore = cvarsToRestore,
@@ -183,9 +193,9 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
-        -- A reload during a run left a test side offset in: put yours back.
+        -- A reload during a run left test settings in: put yours back.
         local lastRun = getDebugStore().sideProbe
-        if lastRun then putSideBack(lastRun) end
+        if lastRun then putSettingsBack(lastRun) end
     elseif event == "PLAYER_ENTERING_WORLD" then
         eventFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
         local lastRun = getDebugStore().sideProbe

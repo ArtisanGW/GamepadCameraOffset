@@ -231,6 +231,8 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         end
     end
     _G.GetBuildInfo = function() return "1.60.1", "70959", "", 16001 end
+    -- Saved tables here are this version's (side in percentages of 12 yd), unless oldSave.
+    if type(saved) == "table" and saved.sideYardsAtFull == nil and not nameplateOptions.oldSave then saved.sideYardsAtFull = 12 end
     _G.GamepadCameraOffsetDB = saved
     _G.GamepadCameraOffsetDebugDB = nil
     _G.GamepadCameraOffsetPopup = nil
@@ -240,6 +242,7 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     local namespace = {}
     assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", namespace)
     assert(loadfile("CenterStop.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("KeepOnScreen.lua"))("GamepadCameraOffset", namespace)
     assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", namespace)
     assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", namespace)
     assert(loadfile("Popup.lua"))("GamepadCameraOffset", namespace)
@@ -292,7 +295,7 @@ test("on a controller, entering the world un-centers the camera and sets both of
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     expectEqual(get("CameraKeepCharacterCentered"), "0", "the temp value wins over the controller's")
     expectEqual(game.saved.CameraKeepCharacterCentered, "1", "your saved setting untouched")
-    expectEqual(get("test_cameraOverShoulder"), "1.2")
+    expectEqual(get("test_cameraOverShoulder"), "4.8")
     expectEqual(get("test_cameraDynamicPitch"), "1")
     expectEqual(get("test_cameraDynamicPitchBaseFovPad"), "0.4375", "tilt 50%: halfway from 0.75 to 0.125")
     expectEqual(get("test_cameraDynamicPitchBaseFovPadFlying"), "0.4375")
@@ -354,11 +357,11 @@ test("sliders apply at once; tilt Off turns the pitch off", function()
     boot(false, nil)
     game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
     set("side", -50)
-    expectEqual(get("test_cameraOverShoulder"), "-1.5", "50% left")
+    expectEqual(get("test_cameraOverShoulder"), "-6", "50% left")
     set("tilt", 0)
     expectEqual(get("test_cameraDynamicPitch"), "0")
     set("side", 999)
-    expectEqual(get("test_cameraOverShoulder"), "3", "clamped")
+    expectEqual(get("test_cameraOverShoulder"), "12", "clamped")
 end)
 
 -- The updater frame of OffsetKeys.lua: its OnUpdate run once, elapsed seconds later.
@@ -386,7 +389,7 @@ test("held drag key: moving the mouse moves the slider, the whole screen its who
     game.cursorX = 500 + 500   -- a quarter of the 2000-pixel screen to the right
     tick(0.016)
     expectEqual(GamepadCameraOffsetDB.side, 50, "saved through the slider's setting")
-    expectEqual(get("test_cameraOverShoulder"), "1.5", "the camera follows")
+    expectEqual(get("test_cameraOverShoulder"), "6", "the camera follows")
     game.cursorX = 500 - 2000
     tick(0.016)
     expectEqual(GamepadCameraOffsetDB.side, -100, "clamped")
@@ -792,7 +795,7 @@ test("/gpco debug on a controller: every check passes, settings come back, findi
     expectEqual(run.failed, 0); expectEqual(run.skipped, 0); expectEqual(run.passed > 20, true, "passed " .. run.passed)
     expectEqual(run.environment.controllerUI, true); expectEqual(run.environment.build, "70959"); expectEqual(run.environment.settings.side, 30)
     expectEqual(describeSavedSettings(), "true 30 20", "your settings back")
-    expectEqual(get("test_cameraOverShoulder"), "0.9", "and applied")
+    expectEqual(get("test_cameraOverShoulder"), "3.6", "and applied")
     expectEqual(GamepadCameraOffsetDebugDB.settingsToRestore, nil)
     local reloadBox = popup()
     expectEqual(reloadBox ~= nil, true, "reload popup shown")
@@ -881,14 +884,15 @@ test("side probe: runs once after login, a shot at each zoom and side with the g
     bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
     runUntilNoTimersLeft()
     local run = GamepadCameraOffsetDebugDB.sideProbe
-    expectEqual(game.screenshots, 9, "3 zooms, 3 sides each")
+    expectEqual(game.screenshots, 14, "3 zooms, 3 sides each, then 5 far ones")
     expectEqual(run.shots[2].zoomSent, 5); expectEqual(run.shots[2].zoom, 5)
     expectEqual(run.shots[2].yardsSent, 1.5); expectEqual(run.shots[2].overShoulder, "1.5")
     expectEqual(run.shots[9].zoom, 20); expectEqual(run.shots[9].overShoulder, "12", "past the slider's end")
     expectEqual(run.shots[9].nameplateAcross, -0.5, "your nameplate, a quarter in from the left")
+    expectEqual(run.shots[14].zoom, 10); expectEqual(run.shots[14].overShoulder, "1000", "how far the game lets it go")
     expectEqual(run.runID, GamepadCameraOffset.DebugSideProbe.RUN_ID)
     expectEqual(describeSavedSettings(), "true 30 20", "your side offset back")
-    expectEqual(get("test_cameraOverShoulder"), "0.9", "and applied")
+    expectEqual(get("test_cameraOverShoulder"), "3.6", "and applied")
     expectEqual(game.zoom, 10, "your zoom back")
     expectEqual(get("nameplateShowSelf"), "0", "your nameplate setting back")
     expectEqual(run.sideToRestore, nil)
@@ -907,8 +911,12 @@ test("side probe: a fight stops it, a reload mid-run puts your side offset back"
     expectEqual(GamepadCameraOffsetDebugDB.sideProbe.stopped, "combat")
     expectEqual(describeSavedSettings(), "true 30 20")
     game.combat = false
-    bootWithSideProbe({ enabled = true, side = -100, tilt = 20 }, { sideProbe = { runID = 0, sideToRestore = 30 } })
+    bootWithSideProbe({ enabled = true, side = -100, tilt = 20 },
+        { sideProbe = { runID = GamepadCameraOffset.DebugSideProbe.RUN_ID, sideToRestore = 30, zoomToRestore = 12 } })
     expectEqual(GamepadCameraOffsetDB.side, 30, "put back at login")
+    expectEqual(game.zoom, 12, "your zoom too")
+    runUntilNoTimersLeft()
+    expectEqual(game.screenshots, 0, "a run stopped by a reload doesn't start again by itself")
 end)
 
 -- DebugWorldFrameProbe.lua: loaded on its own, like the side probe. The fake
@@ -1023,7 +1031,7 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    expectEqual(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    expectEqual(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,KeepOnScreen.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
@@ -1075,6 +1083,52 @@ end)
 test("saved keys the addon doesn't use are dropped, its settings kept", function()
     boot(true, { enabled = true, side = 30, height = 0, somethingElse = 1 })
     expectEqual(GamepadCameraOffsetDB.height, nil); expectEqual(GamepadCameraOffsetDB.somethingElse, nil); expectEqual(GamepadCameraOffsetDB.side, 30)
+end)
+
+test("a side offset saved when 100% was 3 yd: rescaled once, so the camera stays where it was", function()
+    boot(false, { enabled = true, side = 95, tilt = 20 }, false, { oldSave = true })
+    expectEqual(GamepadCameraOffsetDB.side, 24, "95% of 3 yd is about 24% of 12 yd")
+    expectEqual(GamepadCameraOffsetDB.sideYardsAtFull, 12, "saved with the yards it's a percentage of")
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(get("test_cameraOverShoulder"), "2.88", "about the 2.85 it was")
+    boot(false, GamepadCameraOffsetDB)
+    expectEqual(GamepadCameraOffsetDB.side, 24, "not rescaled again")
+    boot(false, { side = -50 }, false, { oldSave = true })
+    expectEqual(GamepadCameraOffsetDB.side, -13, "left rounds as right does")
+    boot(false, nil)
+    expectEqual(GamepadCameraOffsetDB.side, 0, "a new save: nothing to rescale")
+    expectEqual(GamepadCameraOffsetDB.sideYardsAtFull, 12)
+end)
+
+-- The zoom watcher of KeepOnScreen.lua: shown while it follows the zoom.
+local function zoomWatcherShown()
+    for _, fakeFrame in ipairs(game.frames) do if fakeFrame.update and fakeFrame.shown then return true end end
+    return false
+end
+
+test("keep character on screen: off until turned on, then the side offset follows the zoom", function()
+    boot(false, { enabled = true, side = 100 })
+    game.fire("PLAYER_ENTERING_WORLD"); runNextFrame()
+    expectEqual(GamepadCameraOffsetDB.keepOnScreen, false, "off until you turn it on")
+    expectEqual(get("test_cameraOverShoulder"), "12", "off: the slider's yards")
+    expectEqual(zoomWatcherShown(), false, "off: the zoom isn't watched")
+    set("keepOnScreen", true)
+    -- Zoom 10 on a 1000 x 768 screen: 10 x 0.45 x (1000 / 768) / 2.4
+    expectEqual(get("test_cameraOverShoulder"), "2.44140625", "on: limited at zoom 10")
+    game.zoom = 20; tick(0.016)
+    expectEqual(get("test_cameraOverShoulder"), "4.8828125", "zoomed out: more")
+    game.zoom = 100; tick(0.016)
+    expectEqual(get("test_cameraOverShoulder"), "12", "far out: never past the slider's")
+    game.zoom = 10; tick(0.016)
+    set("side", -100)
+    expectEqual(get("test_cameraOverShoulder"), "-2.44140625", "left too")
+    set("side", 0)
+    expectEqual(zoomWatcherShown(), false, "centered: nothing to follow")
+    set("side", 50); set("keepOnScreen", false)
+    expectEqual(get("test_cameraOverShoulder"), "6", "off again: the slider's yards")
+    expectEqual(zoomWatcherShown(), false)
+    set("keepOnScreen", true); set("enabled", false)
+    expectEqual(zoomWatcherShown(), false, "disabled: not watched")
 end)
 
 reportLine(passed .. " passed, " .. failed .. " failed")

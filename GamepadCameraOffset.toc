@@ -14,6 +14,7 @@
 
 GamepadCameraOffset.lua
 CenterStop.lua
+KeepOnScreen.lua
 OffsetKeys.lua
 CombatDPad.lua
 Popup.lua

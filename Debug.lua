@@ -20,7 +20,7 @@ Camera.Debug = Debug
 -- (RelatedAddons.lua).
 if Camera.RelatedAddons then Camera.RelatedAddons.countTurnedOffAsMissing = true end
 
-local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown" }
+local SETTING_KEYS = { "enabled", "side", "tilt", "lookDown", "keepOnScreen" }
 
 local function say(text) print("|cff88ccffgco debug|r " .. text) end
 
@@ -85,7 +85,7 @@ local STEPS = {}
 local function addStep(stepFunction) STEPS[#STEPS + 1] = stepFunction end
 
 addStep(function()
-    changeSettings({ enabled = true, side = 45, tilt = 50 })
+    changeSettings({ enabled = true, side = 45, tilt = 50, keepOnScreen = false })
     expectEqual("settings page registered", true, Camera.category ~= nil)
     expectEqual("enabled: camera un-centered (CameraKeepCharacterCentered)", "0",
         Camera.GetCVar(Camera.CVAR_KEEP_CENTERED))
@@ -100,6 +100,15 @@ for _, sidePercent in ipairs({ -100, -50, 0, 50, 100 }) do
             Camera.GetCVar(Camera.CVAR_OVER_SHOULDER))
     end)
 end
+
+addStep(function()
+    changeSettings({ side = 100, keepOnScreen = true })
+    expectNear("keep character on screen: side 100% right, limited by the zoom",
+        math.min(Camera.SIDE_YARDS_AT_FULL, Camera.KeepOnScreen.MaxYards()), Camera.GetCVar(Camera.CVAR_OVER_SHOULDER))
+    changeSettings({ keepOnScreen = false })
+    expectNear("keep character on screen off: side 100% right, the full yards", Camera.SIDE_YARDS_AT_FULL,
+        Camera.GetCVar(Camera.CVAR_OVER_SHOULDER))
+end)
 
 -- Tilt: off, then the pad expected for each percentage (0.75 at 1% down to
 -- 0.125 at 100%, the game's pad working backwards).
