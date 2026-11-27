@@ -19,7 +19,8 @@ With a controller, the game keeps your character in the middle of the screen, wi
 **Hold & drag:** bind one key and slide the camera from one shoulder to the other while you play, no menus. Hold it and move the mouse, or on a controller push the left stick: your character stays put while the camera moves. In a fight, the D-pad's left and right step it instead.
 
 It's a simple tool with no dependencies:
-- Side offset: the camera over your right or left shoulder
+- Side offset: the camera over your right or left shoulder, up to 12 yards
+- Keep character on screen: lowers the side offset while you're zoomed in, so your character never leaves the screen
 - Tilt: your character sits lower on the screen, so you see more ahead
 - Tilt when looking down: how much of the tilt stays when you look down at your character
 - Keys for the side offset, in Key Bindings > AddOns: hold & drag, or step it left and right

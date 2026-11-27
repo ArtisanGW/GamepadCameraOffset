@@ -5,6 +5,9 @@
 - The chat command is now /gpco (or /gamepadcameraoffset); /gco no longer works
 - Stop at center: a held Left or Right key (or the D-pad during hold & drag) stops at the center too; press again to go past it
 - Stop at center: the left stick stops at the center until you let it go; push again to go past it
+- The side offset goes four times as far: 100% is now 12 yards (it was 3). Your saved side offset is converted, so your camera stays where it was
+- Keep character on screen (off until you turn it on): lowers the side offset while you're zoomed in, so your character stays on screen; zoom back out and it comes back
+- The side slider moves in 2% steps (it was 5%), for finer control near the center
 
 ## 1.2.1
 
