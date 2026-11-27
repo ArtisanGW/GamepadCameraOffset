@@ -16,7 +16,7 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 8,
+    RUN_ID = 9,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
@@ -28,8 +28,9 @@ local DebugSideProbe = {
     -- RUN_ID 6 (every 125): it moved up to 250; from 375 the camera was back
     -- near your character, the same picture from 500 to 1000.
     -- RUN_ID 7 (every 16): the camera jumped back between 250 and 266.
-    -- Every 2 between, every 1 around 256.
-    MAX_YARDS = { 250, 252, 254, 255, 256, 257, 258, 260, 262, 264, 266 },
+    -- RUN_ID 8 (every 2): it moved up to 260 (into a tree), was back by 262.
+    -- Now with where the game says the camera is, both sides.
+    MAX_YARDS = { 0, 3, 100, 250, 260, 262, -260, -262 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
@@ -81,6 +82,31 @@ local function cameraFunctions()
     end
     table.sort(names)
     return names
+end
+
+-- A function's results, saved as they are (numbers, strings, booleans) or as
+-- text; { false, error } when it failed or doesn't exist.
+local function results(gameFunction, ...)
+    if type(gameFunction) ~= "function" then return { false, "missing" } end
+    local packed = { pcall(gameFunction, ...) }
+    for i = 1, #packed do
+        local valueType = type(packed[i])
+        if valueType ~= "number" and valueType ~= "string" and valueType ~= "boolean" then
+            packed[i] = tostring(packed[i])
+        end
+    end
+    return packed
+end
+
+-- Where the game says the camera is: the spectator mode's camera functions
+-- (C_Commentator), and your character's position to compare with.
+local function cameraPlace()
+    local commentator = _G.C_Commentator or {}
+    return {
+        commentatorPosition = results(commentator.GetCameraPosition),
+        commentatorCamera = results(commentator.GetCamera),
+        playerPosition = results(_G.UnitPosition, "player"),
+    }
 end
 
 -- The game's "Screen captured" line stays out of the next shot.
@@ -185,6 +211,7 @@ local function measure(index)
             zoomSent = measurement.zoom,
             zoom = GetCameraZoom(),
             nameplateAcross = nameplateAcross(),
+            cameraPlace = cameraPlace(),
             time = date("%H:%M:%S"),
         }
         Screenshot()
@@ -208,6 +235,7 @@ function DebugSideProbe.Start()
         screenWidth = GetScreenWidth() * UIParent:GetEffectiveScale(),
         cameraCVars = cameraCVars(),
         cameraFunctions = cameraFunctions(),
+        fieldOfView = results(_G.GetCameraFOVDefaults),
         shots = {},
     }
     getDebugStore().sideProbe = probe

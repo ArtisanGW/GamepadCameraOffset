@@ -895,6 +895,8 @@ test("side probe: runs once after login, a shot at each zoom and side with the g
     expectEqual(run.shots[17].zoom, 10); expectEqual(run.shots[17].overShoulder, "10000", "how far the game lets it go")
     expectEqual(run.runID, GamepadCameraOffset.DebugSideProbe.RUN_ID)
     expectEqual(table.concat(run.cameraFunctions, ","), "CameraZoomIn,CameraZoomOut,GetCameraZoom", "the game's camera functions")
+    expectEqual(run.shots[1].cameraPlace.commentatorPosition[2], "missing", "no spectator functions here: said so")
+    expectEqual(run.fieldOfView[2], "missing")
     expectEqual(describeSavedSettings(), "true 30 20", "your side offset back")
     expectEqual(get("test_cameraOverShoulder"), "3.6", "and applied")
     expectEqual(game.zoom, 10, "your zoom back")
