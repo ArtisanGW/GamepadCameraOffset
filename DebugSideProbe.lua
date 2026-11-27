@@ -16,7 +16,7 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 7,
+    RUN_ID = 8,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
@@ -27,8 +27,9 @@ local DebugSideProbe = {
     -- RUN_ID 5: the picture moved up to 100, and was the same from 1000 to 10000.
     -- RUN_ID 6 (every 125): it moved up to 250; from 375 the camera was back
     -- near your character, the same picture from 500 to 1000.
-    -- Every 16 between 250 and 375, to find where it stops; 1000 to compare with.
-    MAX_YARDS = { 250, 266, 281, 297, 312, 328, 344, 359, 375, 1000 },
+    -- RUN_ID 7 (every 16): the camera jumped back between 250 and 266.
+    -- Every 2 between, every 1 around 256.
+    MAX_YARDS = { 250, 252, 254, 255, 256, 257, 258, 260, 262, 264, 266 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
@@ -58,6 +59,28 @@ local function cameraCVars()
         end
     end
     return values
+end
+
+-- Every function the game has with "camera" in its name: globals, and the
+-- members of its C_ namespaces. Looking for one that says where the camera is.
+local function cameraFunctions()
+    local names = {}
+    for name, value in pairs(_G) do
+        if type(name) == "string" then
+            if type(value) == "function" and name:lower():find("camera") then
+                names[#names + 1] = name
+            elseif type(value) == "table" and name:find("^C_") then
+                for memberName, member in pairs(value) do
+                    if type(memberName) == "string" and type(member) == "function"
+                        and (name:lower():find("camera") or memberName:lower():find("camera")) then
+                        names[#names + 1] = name .. "." .. memberName
+                    end
+                end
+            end
+        end
+    end
+    table.sort(names)
+    return names
 end
 
 -- The game's "Screen captured" line stays out of the next shot.
@@ -184,6 +207,7 @@ function DebugSideProbe.Start()
         tilt = Camera.GetSettings().tilt,
         screenWidth = GetScreenWidth() * UIParent:GetEffectiveScale(),
         cameraCVars = cameraCVars(),
+        cameraFunctions = cameraFunctions(),
         shots = {},
     }
     getDebugStore().sideProbe = probe
