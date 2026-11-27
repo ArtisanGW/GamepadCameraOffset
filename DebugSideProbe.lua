@@ -16,7 +16,7 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 9,
+    RUN_ID = 10,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
@@ -29,8 +29,10 @@ local DebugSideProbe = {
     -- near your character, the same picture from 500 to 1000.
     -- RUN_ID 7 (every 16): the camera jumped back between 250 and 266.
     -- RUN_ID 8 (every 2): it moved up to 260 (into a tree), was back by 262.
-    -- Now with where the game says the camera is, both sides.
-    MAX_YARDS = { 0, 3, 100, 250, 260, 262, -260, -262 },
+    -- RUN_ID 9: the game says nothing of where the camera is (C_Commentator
+    -- returns nothing outside spectator mode); left, -262 was still far.
+    -- Left, past where the right side stopped.
+    MAX_YARDS = { -262, -300, -350, -400, -500, -600, -800, -1000, -2000, -10000 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
@@ -106,6 +108,7 @@ local function cameraPlace()
         commentatorPosition = results(commentator.GetCameraPosition),
         commentatorCamera = results(commentator.GetCamera),
         playerPosition = results(_G.UnitPosition, "player"),
+        playerFacing = results(_G.GetPlayerFacing),
     }
 end
 
