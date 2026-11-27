@@ -16,7 +16,7 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 10,
+    RUN_ID = 11,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
@@ -31,8 +31,9 @@ local DebugSideProbe = {
     -- RUN_ID 8 (every 2): it moved up to 260 (into a tree), was back by 262.
     -- RUN_ID 9: the game says nothing of where the camera is (C_Commentator
     -- returns nothing outside spectator mode); left, -262 was still far.
-    -- Left, past where the right side stopped.
-    MAX_YARDS = { -262, -300, -350, -400, -500, -600, -800, -1000, -2000, -10000 },
+    -- RUN_ID 10: left, it went on to -10000 (the ocean): no limit there.
+    -- Right again, your character moved away from the tree.
+    MAX_YARDS = { 250, 262, 300, 400, 500, 1000, 2000, 5000, 10000 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
