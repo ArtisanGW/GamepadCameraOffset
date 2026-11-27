@@ -1,6 +1,7 @@
 -- Debug only, not for release (.pkgmeta). Measures how far the camera really
--- goes to each side: sets the side offset to each of SIDES, waits for the
--- camera to settle, saves what the game took (test_cameraOverShoulder, the
+-- goes to each side: sends test_cameraOverShoulder each of YARDS (past the
+-- side slider's SIDE_YARDS_AT_FULL too, to see where the game stops), waits for
+-- the camera to settle, saves what the game took (test_cameraOverShoulder, the
 -- zoom) and takes a screenshot (the game's Screenshots folder). Then it puts
 -- your side offset back and shows a reload box that writes
 -- GamepadCameraOffsetDebugDB.sideProbe.
@@ -10,11 +11,11 @@
 local Camera = _G.GamepadCameraOffset
 
 local DebugSideProbe = {
-    RUN_ID = 1,
+    RUN_ID = 2,
     START_SECONDS = 6,
     SETTLE_SECONDS = 2.5,
     AFTER_SHOT_SECONDS = 0.5,   -- the shot is taken before the camera moves on
-    SIDES = { 0, -100, 100, -50, 50 },
+    YARDS = { 0, 3, 4.5, 6, 9, 12, 20, -6, -12 },
 }
 Camera.DebugSideProbe = DebugSideProbe
 
@@ -74,17 +75,28 @@ local function finish(stopReason)
         buttons = { { text = RELOADUI or "Reload", reload = true }, { text = LATER or "Later" } } })
 end
 
+-- The side slider at its end on that side turns the offsets on (ActionCam);
+-- then the yards go straight to the CVar, past what the slider sends.
+local function sendYards(yards)
+    local sidePercent = (yards > 0 and Camera.SIDE_MAX) or (yards < 0 and Camera.SIDE_MIN) or 0
+    Camera.OffsetKeys.SetSide(sidePercent)
+    local setter = (C_CVar and C_CVar.SetCVar) or SetCVar
+    pcall(setter, Camera.CVAR_OVER_SHOULDER, tostring(yards))
+end
+
 local function measure(index)
     if not probe then return end
-    local sidePercent = DebugSideProbe.SIDES[index]
-    if sidePercent == nil then return finish() end
-    Camera.OffsetKeys.SetSide(sidePercent)
-    local secondsLeft = (#DebugSideProbe.SIDES - index + 1) * (DebugSideProbe.SETTLE_SECONDS + DebugSideProbe.AFTER_SHOT_SECONDS)
+    local yards = DebugSideProbe.YARDS[index]
+    if yards == nil then return finish() end
+    sendYards(yards)
+    local tookAtOnce = Camera.GetCVar(Camera.CVAR_OVER_SHOULDER)
+    local secondsLeft = (#DebugSideProbe.YARDS - index + 1) * (DebugSideProbe.SETTLE_SECONDS + DebugSideProbe.AFTER_SHOT_SECONDS)
     timerText:SetText(string.format("Side offset test: %d s left. Don't move.", math.ceil(secondsLeft)))
     C_Timer.After(DebugSideProbe.SETTLE_SECONDS, function()
         if not probe then return end
         probe.shots[#probe.shots + 1] = {
-            side = sidePercent,
+            yardsSent = yards,
+            overShoulderAtOnce = tookAtOnce,
             overShoulder = Camera.GetCVar(Camera.CVAR_OVER_SHOULDER),
             zoom = GetCameraZoom(),
             time = date("%H:%M:%S"),
