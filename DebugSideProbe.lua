@@ -23,7 +23,7 @@ local DebugSideProbe = {
     ZOOMS = { 5, 10, 20 },
     SHARES = { 0, 0.3, 0.6 },   -- side offset in yards = share * zoom
     MAX_ZOOM = 10,
-    MAX_YARDS = { 20, 30, 50, 100, 1000 },
+    MAX_YARDS = { 20, 30, 50, 100, 1000, 2000, 5000, 10000 },
     -- Your own nameplate, on for the run: it follows your character across the screen.
     NAMEPLATE_CVARS = { nameplateShowSelf = "1", nameplatePersonalShowAlways = "1" },
 }
