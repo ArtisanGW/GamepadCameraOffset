@@ -882,6 +882,9 @@ end
 
 test("side probe: runs once after login, a shot at each zoom and side with the game's value, your settings back", function()
     bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
+    -- The lists change from one measurement to the next: fixed here.
+    GamepadCameraOffset.DebugSideProbe.ZOOMS = { 5, 10, 20 }
+    GamepadCameraOffset.DebugSideProbe.MAX_YARDS = { 20, 30, 50, 100, 1000, 2000, 5000, 10000 }
     runUntilNoTimersLeft()
     local run = GamepadCameraOffsetDebugDB.sideProbe
     expectEqual(game.screenshots, 17, "3 zooms, 3 sides each, then 8 far ones")
