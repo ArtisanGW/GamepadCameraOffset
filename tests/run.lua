@@ -159,13 +159,16 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
         OpenToCategory = function(id) game.opened = id end,
     }
     _G.SlashCmdList = {}
-    _G.UIParent = { GetHeight = function() return 768 end, GetEffectiveScale = function() return 2 end,
+    _G.UIParent = { GetHeight = function() return 768 end, GetWidth = function() return 1000 end, GetEffectiveScale = function() return 2 end,
         CreateFontString = function() return newFakeRegion() end }
     game.cursorX = 500
     _G.GetCursorPosition = function() return game.cursorX, 300 end
     _G.GetScreenWidth = function() return 1000 end   -- 2000 pixels at scale 2
+    _G.GetScreenHeight = function() return 768 end
     game.zoom = 10
     _G.GetCameraZoom = function() return game.zoom end
+    _G.CameraZoomIn = function(change) game.zoom = game.zoom - change end
+    _G.CameraZoomOut = function(change) game.zoom = game.zoom + change end
     _G.GetCursorCenterPosition = function() return 0, 480 end
     _G.issecretvalue = function(value) return type(value) == "table" and value.secret == true end
     _G.hooksecurefunc = function(owner, methodName, hook)
@@ -863,21 +866,31 @@ local function bootWithSideProbe(saved, debugStore)
     _G.date = os.date
     game.screenshots = 0
     _G.Screenshot = function() game.screenshots = game.screenshots + 1 end
+    -- Your own nameplate, a quarter of the screen in from the left edge: 500 of 2000 pixels.
+    local namePlate = { IsVisible = function() return true end, GetCenter = function() return 250, 300 end,
+        GetEffectiveScale = function() return 2 end }
+    _G.C_NamePlate = { GetNamePlateForUnit = function(unit)
+        if unit == "player" and get("nameplateShowSelf") == "1" then return namePlate end
+    end }
+    game.saved.nameplateShowSelf = "0"
     assert(loadfile("DebugSideProbe.lua"))("GamepadCameraOffset", {})
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
 end
 
-test("side probe: runs once after login, a shot at each side with the game's value, your side offset back", function()
+test("side probe: runs once after login, a shot at each zoom and side with the game's value, your settings back", function()
     bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
     runUntilNoTimersLeft()
     local run = GamepadCameraOffsetDebugDB.sideProbe
-    expectEqual(game.screenshots, 5)
-    expectEqual(run.shots[2].side, -100); expectEqual(run.shots[2].overShoulder, "-3")
-    expectEqual(run.shots[3].side, 100); expectEqual(run.shots[3].overShoulder, "3")
-    expectEqual(run.shots[2].zoom, 10)
+    expectEqual(game.screenshots, 9, "3 zooms, 3 sides each")
+    expectEqual(run.shots[2].zoomSent, 5); expectEqual(run.shots[2].zoom, 5)
+    expectEqual(run.shots[2].yardsSent, 1.5); expectEqual(run.shots[2].overShoulder, "1.5")
+    expectEqual(run.shots[9].zoom, 20); expectEqual(run.shots[9].overShoulder, "12", "past the slider's end")
+    expectEqual(run.shots[9].nameplateAcross, -0.5, "your nameplate, a quarter in from the left")
     expectEqual(run.runID, GamepadCameraOffset.DebugSideProbe.RUN_ID)
     expectEqual(describeSavedSettings(), "true 30 20", "your side offset back")
     expectEqual(get("test_cameraOverShoulder"), "0.9", "and applied")
+    expectEqual(game.zoom, 10, "your zoom back")
+    expectEqual(get("nameplateShowSelf"), "0", "your nameplate setting back")
     expectEqual(run.sideToRestore, nil)
     expectEqual(popupButtons(), "Later, [secure] Reload")
     bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, GamepadCameraOffsetDebugDB)
