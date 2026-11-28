@@ -10,19 +10,19 @@
 # ## SavedVariables: GamepadCameraOffsetDB
 #@end-non-debug@
 ## Category: Gamepad
-## IconTexture: Interface\AddOns\GamepadCameraOffset\Media\icon-64.png
+## IconTexture: Interface\AddOns\GamepadCameraOffset\Code\Media\icon-64.png
 
-GamepadCameraOffset.lua
-CenterStop.lua
-OffsetKeys.lua
-CombatDPad.lua
-Popup.lua
-RelatedAddons.lua
+Code/GamepadCameraOffset.lua
+Code/CenterStop.lua
+Code/OffsetKeys.lua
+Code/CombatDPad.lua
+Code/Popup.lua
+Code/RelatedAddons.lua
 #@do-not-package@
 # Development builds only: left out of the release (.pkgmeta)
-Debug.lua
-DebugKeys.lua
-DebugPadProbe.lua
-DebugSideProbe.lua
-DebugWorldFrameProbe.lua
+Code/Debug.lua
+Code/DebugKeys.lua
+Code/DebugPadProbe.lua
+Code/DebugSideProbe.lua
+Code/DebugWorldFrameProbe.lua
 #@end-do-not-package@

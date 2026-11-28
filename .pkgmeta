@@ -4,25 +4,19 @@ package-as: GamepadCameraOffset
 
 # Comments only on their own line: the packager reads anything after an item as part of it.
 ignore:
-  # the screenshots for the CurseForge gallery
-  - Media/screenshots
+  # the CurseForge page material: its text, gallery screenshots, icon sources
+  - Data
   - tests
   # /gpco debug, the in-game test suite; its .toc line is in a do-not-package block
-  - Debug.lua
+  - Code/Debug.lua
   # watches hold & drag on screen (dev builds only)
-  - DebugKeys.lua
+  - Code/DebugKeys.lua
   # checks whether controller override bindings reach the addon (dev builds only)
-  - DebugPadProbe.lua
+  - Code/DebugPadProbe.lua
   # measures how far the camera goes to each side, with screenshots (dev builds only)
-  - DebugSideProbe.lua
+  - Code/DebugSideProbe.lua
   # whether moving the WorldFrame moves the picture up or down, with screenshots (dev builds only)
-  - DebugWorldFrameProbe.lua
-  # the icon's source and its CurseForge size; the game uses Media/icon-64.png
-  - Media/icon.svg
-  - Media/icon-400.png
-  # the CurseForge description and its movie, linked from CURSEFORGE.md
-  - Media/description
-  - CURSEFORGE.md
+  - Code/DebugWorldFrameProbe.lua
 
 # The changelog shown with each release: written by hand, not built from commit messages.
 manual-changelog:

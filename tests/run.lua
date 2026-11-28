@@ -235,13 +235,13 @@ local function boot(gamepad, saved, releaseBuild, nameplateOptions)
     game.printed = printed
     _G.print = function(text) printed[#printed + 1] = text end
     local namespace = {}
-    assert(loadfile("GamepadCameraOffset.lua"))("GamepadCameraOffset", namespace)
-    assert(loadfile("CenterStop.lua"))("GamepadCameraOffset", namespace)
-    assert(loadfile("OffsetKeys.lua"))("GamepadCameraOffset", namespace)
-    assert(loadfile("CombatDPad.lua"))("GamepadCameraOffset", namespace)
-    assert(loadfile("Popup.lua"))("GamepadCameraOffset", namespace)
-    assert(loadfile("RelatedAddons.lua"))("GamepadCameraOffset", namespace)
-    if not releaseBuild then assert(loadfile("Debug.lua"))("GamepadCameraOffset", namespace) end
+    assert(loadfile("Code/GamepadCameraOffset.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Code/CenterStop.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Code/OffsetKeys.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Code/CombatDPad.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Code/Popup.lua"))("GamepadCameraOffset", namespace)
+    assert(loadfile("Code/RelatedAddons.lua"))("GamepadCameraOffset", namespace)
+    if not releaseBuild then assert(loadfile("Code/Debug.lua"))("GamepadCameraOffset", namespace) end
     fire("ADDON_LOADED", "GamepadCameraOffset")
 end
 local function runNextFrame() local dueTimers = game.timers; game.timers = {}; for _, timer in ipairs(dueTimers) do timer() end end
@@ -863,7 +863,7 @@ local function bootWithSideProbe(saved, debugStore)
     _G.date = os.date
     game.screenshots = 0
     _G.Screenshot = function() game.screenshots = game.screenshots + 1 end
-    assert(loadfile("DebugSideProbe.lua"))("GamepadCameraOffset", {})
+    assert(loadfile("Code/DebugSideProbe.lua"))("GamepadCameraOffset", {})
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
 end
 
@@ -941,7 +941,7 @@ local function bootWithWorldFrameProbe(debugStore)
     worldFrame:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, 0)
     worldFrame:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0)
     _G.WorldFrame = worldFrame
-    assert(loadfile("DebugWorldFrameProbe.lua"))("GamepadCameraOffset", {})
+    assert(loadfile("Code/DebugWorldFrameProbe.lua"))("GamepadCameraOffset", {})
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
 end
 
@@ -1004,14 +1004,14 @@ test("the release leaves Debug.lua out: ignored by .pkgmeta, and gone from the r
     local function readFile(path) local file = assert(io.open(path)); local text = file:read("*a"); file:close(); return text end
     local packageRules = readFile(".pkgmeta")
     -- The whole line: the packager takes anything after the name (a comment too) as part of it.
-    assert(packageRules:find("\n  %- Debug%.lua\n"), ".pkgmeta ignores Debug.lua, alone on its line")
+    assert(packageRules:find("\n  %- Code/Debug%.lua\n"), ".pkgmeta ignores Debug.lua, alone on its line")
     local releaseToc = readFile("GamepadCameraOffset.toc"):gsub("\r", "")
         :gsub("#@do%-not%-package@.-#@end%-do%-not%-package@\n?", "")   -- what the packager does
     local loadedFiles = {}
     for line in releaseToc:gmatch("[^\n]+") do
         if not line:find("^#") then loadedFiles[#loadedFiles + 1] = line end
     end
-    expectEqual(table.concat(loadedFiles, ","), "GamepadCameraOffset.lua,CenterStop.lua,OffsetKeys.lua,CombatDPad.lua,Popup.lua,RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
+    expectEqual(table.concat(loadedFiles, ","), "Code/GamepadCameraOffset.lua,Code/CenterStop.lua,Code/OffsetKeys.lua,Code/CombatDPad.lua,Code/Popup.lua,Code/RelatedAddons.lua", "the release .toc loads the addon's files, no Debug.lua")
 end)
 
 test("listed under Gamepad in the AddOns list, the game's own word", function()
@@ -1032,8 +1032,8 @@ end)
 test("its icon in the AddOns list: Media/icon-64.png, shipped", function()
     local function readBytes(path) local file = assert(io.open(path, "rb")); local text = file:read("*a"); file:close(); return text end
     local toc = readBytes("GamepadCameraOffset.toc"):gsub("\r", "")
-    expectEqual(toc:match("## IconTexture: ([^\n]+)"), "Interface\\AddOns\\GamepadCameraOffset\\Media\\icon-64.png")
-    expectEqual(readBytes("Media/icon-64.png"):sub(2, 4), "PNG", "a PNG file")
+    expectEqual(toc:match("## IconTexture: ([^\n]+)"), "Interface\\AddOns\\GamepadCameraOffset\\Code\\Media\\icon-64.png")
+    expectEqual(readBytes("Code/Media/icon-64.png"):sub(2, 4), "PNG", "a PNG file")
     expectEqual(readBytes(".pkgmeta"):find("- Media/icon-64.png", 1, true), nil, "not left out of the release")
 end)
 
