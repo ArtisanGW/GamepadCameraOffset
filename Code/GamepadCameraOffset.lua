@@ -22,6 +22,20 @@
 -- all, so the addon stops the game listening for that event with
 -- GameEvent.UnregisterInternalEvent, the game's own way to drop an event, and hides the warning if it
 -- shows up some other way.
+--
+-- Files, one job each (in the .toc's load order):
+--   GamepadCameraOffset.lua   saved settings, the settings page, the camera, /gpco
+--   CenterStop.lua            Stop at center: hold & drag stops at the center
+--   KeepOnScreen.lua          Keep character on screen: a lower side offset while zoomed in
+--   OffsetKeys.lua            key bindings that move the side offset
+--   CombatDPad.lua            in a fight, the D-pad steps the side offset
+--   Popup.lua                 a popup in the game's style
+--   RelatedAddons.lua         hints for our other controller addons
+--   Debug.lua                 development builds only: /gpco debug, the in-game tests
+--   DebugKeys.lua             development builds only: what reaches hold & drag
+--   DebugPadProbe.lua         development builds only: do stick and D-pad bindings reach us
+--   DebugSideProbe.lua        development builds only: how far the camera goes each side
+--   DebugWorldFrameProbe.lua  development builds only: moving the WorldFrame, up or down
 local ADDON_NAME = ...
 
 local Camera = {
