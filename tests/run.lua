@@ -867,13 +867,14 @@ local function bootWithSideProbe(saved, debugStore)
     game.fire("PLAYER_LOGIN"); game.fire("PLAYER_ENTERING_WORLD")
 end
 
-test("side probe: runs once after login, a shot at each side with the game's value, your side offset back", function()
+test("side probe: runs once after login, a shot at each yards sent with the game's value, your side offset back", function()
     bootWithSideProbe({ enabled = true, side = 30, tilt = 20 }, nil)
     runUntilNoTimersLeft()
     local run = GamepadCameraOffsetDebugDB.sideProbe
-    expectEqual(game.screenshots, 5)
-    expectEqual(run.shots[2].side, -100); expectEqual(run.shots[2].overShoulder, "-3")
-    expectEqual(run.shots[3].side, 100); expectEqual(run.shots[3].overShoulder, "3")
+    expectEqual(game.screenshots, #GamepadCameraOffset.DebugSideProbe.YARDS)
+    expectEqual(run.shots[2].yardsSent, 3); expectEqual(run.shots[2].overShoulder, "3")
+    expectEqual(run.shots[5].yardsSent, 9); expectEqual(run.shots[5].overShoulder, "9", "past the slider's 3 yd")
+    expectEqual(run.shots[8].yardsSent, -6); expectEqual(run.shots[8].overShoulder, "-6")
     expectEqual(run.shots[2].zoom, 10)
     expectEqual(run.runID, GamepadCameraOffset.DebugSideProbe.RUN_ID)
     expectEqual(describeSavedSettings(), "true 30 20", "your side offset back")
