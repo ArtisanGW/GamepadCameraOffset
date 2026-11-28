@@ -1,6 +1,6 @@
 # Summary
 
-Moves the camera over your shoulder, with a controller too. Hold one key and slide it to the side you like.
+Play over the shoulder like the hero of your own story. Hold one key and slide the camera to the side you like, with a controller too.
 
 # Categories
 
