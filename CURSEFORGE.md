@@ -8,7 +8,7 @@ Moves the camera over your shoulder, with a controller too. Hold one key and sli
 
 # License
 
-Apache License 2.0
+GNU General Public License version 3 (GPLv3)
 
 # Description
 
